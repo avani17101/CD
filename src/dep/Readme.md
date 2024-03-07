@@ -1,0 +1,2 @@
+## CDEP
+Codebase of paper  "Interpretations are useful: penalizing explanations to align neural networks with prior knowledge" from https://github.com/laura-rieger/deep-explanation-penalization/tree/master
