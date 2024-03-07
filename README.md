@@ -35,6 +35,10 @@ pip install -r requirements.txt
 
 * We provide an additional script CD_modular.py for you to customize according to dataset, models and task at hand (with user given concept sets)
 
+## TODOs
+* Clean codebase.
+* Add concept examples for example code run.
+
 
 ## Acknowledgements
 * We referred codebase by [official-tcav](https://github.com/tensorflow/tcav) which is written in tensorflow and [pytorch-tcav](https://github.com/rakhimovv/tcav) written in pytorch for TCAV implementation.
