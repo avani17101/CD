@@ -56,11 +56,11 @@ from PIL import Image
 import os
 import glob
 from tqdm import tqdm
-
+DATA_PATH = '/media/Data2/avani.gupta/'
 class IMDBTestDataSet(Dataset):
     def __init__(self, transforms):
         
-        self.data_dir = '/media/Data2/avani.gupta/imdb_crop/'
+        self.data_dir = DATA_PATH+'imdb_crop/'
         path = '/home/avani.gupta/tcav_pt/learning-not-to-learn/dataset/IMDB/IMDB_with_bias/'
         img_df = pd.read_csv(path+'test_list.csv')
         self.image_list = img_df['img_name'].values
@@ -86,7 +86,7 @@ class IMDBTestDataSet(Dataset):
 
 class CatTestDataSet(Dataset):
     def __init__(self, transforms):
-        self.data_dir = '/media/Data2/avani.gupta/dog_cats/test/'
+        self.data_dir = DATA_PATH+'dog_cats/test/'
         self.image_list = os.listdir(self.data_dir)
         self.transforms = transforms
         
@@ -143,7 +143,7 @@ if __name__ == '__main__':
             
             in_feats = model.fc.in_features
             model.fc = nn.Linear(in_feats, 1)
-            for n in glob.glob('/media/Data2/avani.gupta/'+dset+'_model_transfer_learn'+bias+'*.pt'):
+            for n in glob.glob(DATA_PATH+''+dset+'_model_transfer_learn'+bias+'*.pt'):
                 try:
                     model.load_state_dict(torch.load(n))
                     model = model.cuda()
@@ -264,7 +264,7 @@ def load_image_from_file(filename, shape=(384,512),convert_srgb=False):
         print("eror in reading img", filename)
         return []
       
-def split_concept(con, path='/media/Data2/avani.gupta/IID_data/concepts/'):
+def split_concept(con, path=DATA_PATH+'IID_data/concepts/'):
     '''
     splits concept folder
     '''
@@ -604,30 +604,30 @@ class ImgsDataset2(Dataset):
 
     def __getitem__(self, idx):
         con = self.concepts[idx]
-        path = '/media/Data2/avani.gupta/imgs_np_'+str(self.shape[1])+'by'+str(self.shape[2])+'/'
+        path = DATA_PATH+'imgs_np_'+str(self.shape[1])+'by'+str(self.shape[2])+'/'
         # if not os.path.exists(path+con+'.npy'):
         # dump_imgs(tuple(self.shape[1:]),con,self.num_imgs)
         
         imgs = np.load(path+con+'.npy')
         # if self.model_type =='isic' or self.model_type=='isic_vgg':
-        #     path = '/media/Data2/avani.gupta/imgs_np_450by600/'
+        #     path = DATA_PATH+'imgs_np_450by600/'
         #     imgs = np.load(path+con+'.npy')
         # elif self.model_type =='clever_hans7':
-        #     path = '/media/Data2/avani.gupta/imgs_np_224by224/'
+        #     path = DATA_PATH+'imgs_np_224by224/'
         #     imgs = np.load(path+con+'.npy')
 
         # elif self.model_type =='clever_hans':
-        #     path = '/media/Data2/avani.gupta/imgs_np_224by224/'
+        #     path = DATA_PATH+'imgs_np_224by224/'
         #     imgs = np.load(path+con+'.npy')
 
         # elif self.model_type=='toy' or self.model_type=='toy_conv':
-        #     save_path = '/media/Data2/avani.gupta/imgs_np_'+str(self.shape[0])+'by'+str(self.shape[1])+'_gray/'
+        #     save_path = DATA_PATH+'imgs_np_'+str(self.shape[0])+'by'+str(self.shape[1])+'_gray/'
         #     imgs = np.load(save_path+con+'.npy') #load all imgs and save student out for them
         #     imgs = (imgs[:,:,:,0] + imgs[:,:,:,1] + imgs[:,:,:,2])/3 #convert rgb to gray: https://www.baeldung.com/cs/convert-rgb-to-grayscale
         #     imgs = np.expand_dims(imgs, axis=3)
             
         # elif self.shape == (28,28) or self.model_type =='colormnist' or self.model_type=='decoymnist' or self.model_type=='texturemnist':
-        #     save_path = '/media/Data2/avani.gupta/imgs_np_28by28'+'/'
+        #     save_path = DATA_PATH+'imgs_np_28by28'+'/'
         #     if os.path.exists(save_path+con+'.npy'):
         #         imgs = np.load(save_path+con+'.npy')
         #     else:
@@ -635,7 +635,7 @@ class ImgsDataset2(Dataset):
         #         imgs = np.load(save_path+con+'.npy')
         
         # elif self.model_type=='cat_dog' or self.model_type=='faces' or self.model_type=='pacs':
-        #     imgs = np.load('/media/Data2/avani.gupta/imgs_np_224by224/'+con+'.npy')
+        #     imgs = np.load(DATA_PATH+'imgs_np_224by224/'+con+'.npy')
 
         # if self.model_type=='decoymnist': #have grayscale imgs
         #     imgs = (imgs[:,:,:,0] + imgs[:,:,:,1] + imgs[:,:,:,2])/3 #convert rgb to gray: https://www.baeldung.com/cs/convert-rgb-to-grayscale
@@ -1148,7 +1148,7 @@ class CAV_NN(object):
         
         # if val_loss > last_loss:
         #     trigger_times += 1
-        # #     # torch.save(model.state_dict(),'/media/Data2/avani.gupta/'+dset+'_model'+bias+str(run)+'2.pt')
+        # #     # torch.save(model.state_dict(),DATA_PATH+''+dset+'_model'+bias+str(run)+'2.pt')
         # #     run += 1
         #     if trigger_times >= patience:
         #         print('Early stopping at epoch ',epoch)
@@ -1197,11 +1197,11 @@ def get_or_train_cav_nn(concepts,
   return cav_instance, st_dict
 
 def dump_imgs(shape, con, num_imgs,col_type='rgb'):
-    save_path = '/media/Data2/avani.gupta/imgs_np_'+str(shape[0])+'by'+str(shape[1])+'/'
+    save_path = DATA_PATH+'imgs_np_'+str(shape[0])+'by'+str(shape[1])+'/'
     if not os.path.exists(save_path):
         os.makedirs(save_path)
     imgs_loaded = []
-    path = '/media/Data2/avani.gupta/IID_data/concepts/'+con+'/'
+    path = DATA_PATH+'IID_data/concepts/'+con+'/'
     print("tot imgs", len(os.listdir(path)))
     imgs_con_full = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
     num_imgs = int(num_imgs)
@@ -1246,13 +1246,13 @@ def add_rand_to_pairs(pairs, num_random_cons, faces=False):
     
 import glob
 def dump_random_imgs(num_random_cons, num_imgs):
-    rand_imgs = glob.glob('/media/Data2/avani.gupta/IID_data/concepts/randoms/*.png')
+    rand_imgs = glob.glob(DATA_PATH+'IID_data/concepts/randoms/*.png')
     num_random_cons = 10
     shape = (28,28)
     cur = 0
     for i in range(num_random_cons):
         con = 'randoms_'+str(i)
-        save_path = '/media/Data2/avani.gupta/imgs_np_28by28'+'/'
+        save_path = DATA_PATH+'imgs_np_28by28'+'/'
         imgs_loaded = []
         if (cur+num_imgs)>len(rand_imgs):
             print("tot ran cons",i)
@@ -1288,7 +1288,7 @@ class ImgsDataset(Dataset):
 
     def __getitem__(self, idx):
         con = self.concepts[idx]
-        path = f'/media/Data2/avani.gupta/imgs_np_{self.shape[0]}by{self.shape[0]}/'
+        path = DATA_PATH+f'imgs_np_{self.shape[0]}by{self.shape[0]}/'
         if os.path.exists(path+con+'.npy'):
             imgs = np.load(path+con+'.npy')
         else:
@@ -1780,7 +1780,7 @@ def get_model_and_data(model_type, opt, kwargs):
         shape = (28,28)
         if not opt.train_from_scratch:
             print("loading baseline model")
-            # model.load_state_dict(torch.load('/media/Data2/avani.gupta/best_checkpoints/acc98.98best47decoymnistdmnistpairs_vals5num_imgs150lr0.58regularizer_rate0.3wtcav0.93batch_size256per_proto_mean_wt0.35use_proto0use_cdepcolor1use_precalc_proto1update_proto1train_from_scratch1use_knn_proto0class_wise_training0final_run'))
+            # model.load_state_dict(torch.load(DATA_PATH+'best_checkpoints/acc98.98best47decoymnistdmnistpairs_vals5num_imgs150lr0.58regularizer_rate0.3wtcav0.93batch_size256per_proto_mean_wt0.35use_proto0use_cdepcolor1use_precalc_proto1update_proto1train_from_scratch1use_knn_proto0class_wise_training0final_run'))
             model.load_state_dict(torch.load('mnist/DecoyMNIST/orig_model_decoyMNIST_.pt'))
         bottleneck_name = 'conv2'
 
@@ -1815,7 +1815,7 @@ def get_model_and_data(model_type, opt, kwargs):
         shape = (28,28)
 
         if not opt.train_from_scratch:
-            # model.load_state_dict(torch.load('/media/Data2/avani.gupta/new_checkpoints/acc46.64best_val_acc45.7highest_epoch0iter130colormnistcolormnistp8nimg150lr0.01rr0.3wtcav5bs44pwt0.3upr1cd0precalc1up1scratch0uknn1cwt0s42corr'))
+            # model.load_state_dict(torch.load(DATA_PATH+'new_checkpoints/acc46.64best_val_acc45.7highest_epoch0iter130colormnistcolormnistp8nimg150lr0.01rr0.3wtcav5bs44pwt0.3upr1cd0precalc1up1scratch0uknn1cwt0s42corr'))
             model.load_state_dict(torch.load('mnist/ColorMNIST/orig_model_colorMNIST.pt'))
 
     if model_type =='texturemnist':

@@ -67,6 +67,7 @@ torch.cuda.manual_seed(cur_seed)
 # opt.model_type = 'colormnist'
 # opt.dset = 'mnist'
 print(opt)
+DATA_PATH = "/media/Data2/avani.gupta/"
 wandb.init(project="change_cav_exp_"+opt.model_type, entity="avani", config=opt)
 # wandb.init(config=opt, save_code=True, resume= True)
 
@@ -106,7 +107,7 @@ if model_type == 'faces':
     model = resnet18(pretrained=False)
     model.fc = nn.Linear(512,2)
     if not opt.train_from_scratch:
-        model.load_state_dict(torch.load("/media/Data2/avani.gupta/new_checkpoints/acc59.0best_val_acc99.5highest_epoch0iter0facesfacesp8nimg150lr0.01rr0.3wtcav5bs44pwt0.3upr1cd0precalc1up1scratch0uknn1cwt0s42corr"))
+        model.load_state_dict(torch.load(DATA_PATH+"new_checkpoints/acc59.0best_val_acc99.5highest_epoch0iter0facesfacesp8nimg150lr0.01rr0.3wtcav5bs44pwt0.3upr1cd0precalc1up1scratch0uknn1cwt0s42corr"))
     model.cuda()
     model.eval()
     bs = 64
@@ -219,11 +220,11 @@ if model_type =='colormnist':
     shape = (28,28)
 
     if not train_from_scratch:
-        # model.load_state_dict(torch.load('/media/Data2/avani.gupta/new_checkpoints/acc46.64best_val_acc45.7highest_epoch0iter130colormnistcolormnistp8nimg150lr0.01rr0.3wtcav5bs44pwt0.3upr1cd0precalc1up1scratch0uknn1cwt0s42corr'))
+        # model.load_state_dict(torch.load(DATA_PATH+'new_checkpoints/acc46.64best_val_acc45.7highest_epoch0iter130colormnistcolormnistp8nimg150lr0.01rr0.3wtcav5bs44pwt0.3upr1cd0precalc1up1scratch0uknn1cwt0s42corr'))
         model.load_state_dict(torch.load('mnist/ColorMNIST/orig_model_colorMNIST.pt'))
 
 if model_type =='texturemnist':
-    x_numpy_train = np.load(os.path.join("/media/Data2/avani.gupta/data/ColorMNIST", "train_texture_x.npy"))
+    x_numpy_train = np.load(os.path.join(DATA_PATH+"data/ColorMNIST", "train_texture_x.npy"))
     prob = (x_numpy_train.sum(axis = 1) > 0.0).mean(axis = 0).reshape(-1)
     prob /=prob.sum()
     mean = x_numpy_train.mean(axis = (0,2,3))
@@ -300,9 +301,9 @@ pairs_lis = []
 # affect_lis = []
 for pair_n in pairs_vals.split(","):
     pairs_lis.append(get_pairs(model_type,concept_set_type=str(pair_n)))
-    # proto_dic = np.load('/media/Data2/avani.gupta/proto_'+model_type+"knn"+str(knn_k)+'mnistconv1.npy',allow_pickle=True)[()] #load proto dicts
+    # proto_dic = np.load(DATA_PATH+'proto_'+model_type+"knn"+str(knn_k)+'mnistconv1.npy',allow_pickle=True)[()] #load proto dicts
     # else:
-    #     proto_dic = np.load('/media/Data2/avani.gupta/proto_'+model_type+"knn"+str(knn_k)+'.npy',allow_pickle=True)[()] #load proto dicts
+    #     proto_dic = np.load(DATA_PATH+'proto_'+model_type+"knn"+str(knn_k)+'.npy',allow_pickle=True)[()] #load proto dicts
 
 
 print(pairs_lis)
@@ -312,7 +313,7 @@ lis = list(named_layers.keys())
 model.train()
 
 #concept loss params
-project_name = '/media/Data2/avani.gupta/IID-Metric/tcav_pt/tcav_class_test_pt_'+dset+'_finetune'
+project_name = DATA_PATH+'IID-Metric/tcav_pt/tcav_class_test_pt_'+dset+'_finetune'
 
 working_dir =  project_name
 activation_dir =  working_dir+ '/activations/'
@@ -405,9 +406,9 @@ for epoch in tqdm(range(epochs)):
     if use_proto:
         if epoch==0 and use_precalc_proto:
             if opt.dset == 'mnistconv1':
-                proto_dic = np.load('/media/Data2/avani.gupta/proto_colormnistconv1knn7mnistconv1.npy',allow_pickle=True)[()] #load proto dicts
+                proto_dic = np.load(DATA_PATH+'proto_colormnistconv1knn7mnistconv1.npy',allow_pickle=True)[()] #load proto dicts
             else:
-                proto_dic = np.load('/media/Data2/avani.gupta/proto_'+model_type+"knn"+str(knn_k)+'.npy',allow_pickle=True)[()] #load proto dicts
+                proto_dic = np.load(DATA_PATH+'proto_'+model_type+"knn"+str(knn_k)+'.npy',allow_pickle=True)[()] #load proto dicts
      
         elif epoch%2==0 and update_proto:
             max_classwise_samples = 1000 ##max class-samples for proto-type creation
@@ -582,7 +583,7 @@ for epoch in tqdm(range(epochs)):
                             global bn_activation
                             bn_activation = out
                         
-                        path = '/media/Data2/avani.gupta/imgs_np_'+str(shape[0])+'by'+str(shape[1])+'/'
+                        path = DATA_PATH+'imgs_np_'+str(shape[0])+'by'+str(shape[1])+'/'
                         if cur_iter == 0 and epoch ==0:
                             imgs_con = np.load(path+concept+'.npy')[:num_imgs]
                         else:
@@ -611,7 +612,7 @@ for epoch in tqdm(range(epochs)):
                         if random_con in acts:
                             pass #do nothig
                         else:
-                            path = '/media/Data2/avani.gupta/imgs_np_'+str(shape[0])+'by'+str(shape[1])+'/'
+                            path = DATA_PATH+'imgs_np_'+str(shape[0])+'by'+str(shape[1])+'/'
                             imgs_con = np.load(path+random_con+'.npy')[:num_imgs]
                             acts[random_con]= []
                             with torch.no_grad():

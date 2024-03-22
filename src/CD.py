@@ -111,7 +111,7 @@ bias = "1"
 #         wandb.init(project=dset+opt.loss_type+"_runs_new_"+opt.bottleneck_name+'direct'+"pairs"+str(pair_num)+"affect"+str(affect), entity="avani")
 
 #     wandb.init(config=opt)
-
+DATA_PATH = '/media/Data2/avani.gupta/'
 print(opt.gpu_ids)
 use_cuda = torch.cuda.is_available()
 
@@ -128,7 +128,7 @@ if model_type == 'resnet50':
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
     bs = 16
-    imagenet_zip_path = '/media/Data2/avani.gupta/Imagenet2012/Imagenet-sample/'
+    imagenet_zip_path = DATA_PATH+'Imagenet2012/Imagenet-sample/'
     train_dataset = ImageFolder(root=imagenet_zip_path+'train/', transform=val_transforms)
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=2)
 
@@ -139,7 +139,7 @@ if model_type == 'resnet50':
     named_layers = dict(model.named_modules())
     lis = list(named_layers.keys())
     bottleneck_name = "layer4.2.conv3"
-    sub_classes = os.listdir('/media/Data2/avani.gupta/Imagenet2012/Imagenet-sample/train/')
+    sub_classes = os.listdir(DATA_PATH+'Imagenet2012/Imagenet-sample/train/')
 
 if model_type == 'faces':
     model = resnet18(pretrained=False)
@@ -317,7 +317,7 @@ if model_type == 'toy':
     X_full = biased_data 
     model = Net()
     if not train_from_scratch:
-        model.load_state_dict(torch.load('/media/Data2/avani.gupta/net.pt'))
+        model.load_state_dict(torch.load(DATA_PATH+'net.pt'))
     bottleneck_name = 'fc2'
     model.cuda()
 
@@ -486,7 +486,7 @@ lis = list(named_layers.keys())
 model.train()
 
 #concept loss params
-project_name = '/media/Data2/avani.gupta/IID-Metric/tcav_pt/tcav_class_test_pt_'+dset+'_finetune'
+project_name = DATA_PATH+'IID-Metric/tcav_pt/tcav_class_test_pt_'+dset+'_finetune'
 
 working_dir =  project_name
 activation_dir =  working_dir+ '/activations/'
@@ -616,9 +616,9 @@ for epoch in tqdm(range(epochs)):
     if use_proto:
         if epoch==0 and use_precalc_proto:
             # if use_knn_proto:
-            proto_dic = np.load('/media/Data2/avani.gupta/proto_'+model_type+"knn"+str(knn_k)+'.npy',allow_pickle=True)[()] #load proto dicts
+            proto_dic = np.load(DATA_PATH+'proto_'+model_type+"knn"+str(knn_k)+'.npy',allow_pickle=True)[()] #load proto dicts
             # else:
-            #     proto_dic = np.load('/media/Data2/avani.gupta/proto_mean'+model_type+'.npy',allow_pickle=True)[()] #load proto dicts
+            #     proto_dic = np.load(DATA_PATH+'proto_mean'+model_type+'.npy',allow_pickle=True)[()] #load proto dicts
 
         elif epoch%2==0 and update_proto:
             bss = 1000
@@ -814,12 +814,12 @@ for epoch in tqdm(range(epochs)):
                             if do:
                                 if opt.teach_mapped_to_stu:
                                     if model_type =='clever_hans' or model_type =='clever_hans7':
-                                        fc_save_path = '/media/Data2/avani.gupta/fc_new/dino_mapped_to_stu_space_'+dset+'/'
+                                        fc_save_path = DATA_PATH+'fc_new/dino_mapped_to_stu_space_'+dset+'/'
                                         files =  glob.glob(fc_save_path+'_cons_'.join(pair)+'*.pt')
                                         save_path = files[0]
                                         dic = torch.load(save_path)
                                     else:
-                                        fc_save_path = '/media/Data2/avani.gupta/fc_new/dino_mapped_to_stu_space_num_imgs'+str(num_imgs)+dset+'/'
+                                        fc_save_path = DATA_PATH+'fc_new/dino_mapped_to_stu_space_num_imgs'+str(num_imgs)+dset+'/'
                                         files =  glob.glob(fc_save_path+'_cons_'.join(pair)+'*.pt')
                                         save_path = files[0]
                                         dic = torch.load(save_path)
@@ -963,8 +963,8 @@ for epoch in tqdm(range(epochs)):
 
                         if opt.teach_mapped_to_stu:
                            
-                            fc_save_path = '/media/Data2/avani.gupta/fc_new/dino_mapped_to_stu_space_num_imgs'+str(num_imgs)+dset+"M_ep"+str(opt.mapping_mod_epoch)+'/'
-                            # fc_save_path = '/media/Data2/avani.gupta/fc_new/dino_mapped_to_stu_space_'+dset+'/'
+                            fc_save_path = DATA_PATH+'fc_new/dino_mapped_to_stu_space_num_imgs'+str(num_imgs)+dset+"M_ep"+str(opt.mapping_mod_epoch)+'/'
+                            # fc_save_path = DATA_PATH+'fc_new/dino_mapped_to_stu_space_'+dset+'/'
                         
                         files =  glob.glob(fc_save_path+'_cons_'.join(pair)+'*.pt')
 

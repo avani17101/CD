@@ -18,6 +18,7 @@ from torchvision.models import resnet50
 import torchvision.transforms as transforms
 from torchvision.datasets import ImageFolder
 import dep.score_funcs as score_funcs
+DATA_PATH='/ssd_scratch/cvit/avani.gupta/'
 
 class CD():
     '''
@@ -50,10 +51,10 @@ class CD():
         self.transform = transform
         self.write = True
         if self.hparams["use_proto"]:
-            self.proto_dic = np.load('/ssd_scratch/cvit/avani.gupta/proto_'+hparams["model_type"]+"knn"+str(hparams["knn_k"])+'.npy',allow_pickle=True)[()] #load proto dicts
+            self.proto_dic = np.load(DATA_PATH+'proto_'+hparams["model_type"]+"knn"+str(hparams["knn_k"])+'.npy',allow_pickle=True)[()] #load proto dicts
         
         # if self.map_type=='S_to_T':
-        path = '/ssd_scratch/cvit/avani.gupta/teacher_2/'+self.dset+'pairs_vals'+str(self.pairs_vals)
+        path = DATA_PATH+'teacher_2/'+self.dset+'pairs_vals'+str(self.pairs_vals)
         self.upconv_m, self.downconv_m, _,_ = get_mapping_module(model_type)
         if os.path.exists(path+'downconv.pt'):
             self.downconv_m.load_state_dict(torch.load(path+'downconv.pt'))
@@ -76,9 +77,9 @@ class CD():
 
         self.fc_save_path = ''
         if self.map_type=='T_to_S':
-            self.fc_save_path = f'/ssd_scratch/cvit/avani.gupta/fc_new/dino_mapped_to_{self.prefix}stu_space_num_imgs'+str(self.num_imgs)+self.dset+'/'
+            self.fc_save_path = DATA_PATH+f'fc_new/dino_mapped_to_{self.prefix}stu_space_num_imgs'+str(self.num_imgs)+self.dset+'/'
         else:
-            self.fc_save_path = '/ssd_scratch/cvit/avani.gupta/fc_new/direct_dino_pca_space_num_imgs'+str(self.num_imgs)+self.dset+'/'
+            self.fc_save_path = DATA_PATH+'fc_new/direct_dino_pca_space_num_imgs'+str(self.num_imgs)+self.dset+'/'
         
         if not os.path.exists(self.fc_save_path):
             os.makedirs(self.fc_save_path)
@@ -145,7 +146,7 @@ class CD():
         best_val_loss = 10e5
         for ep in tqdm(range(5)):
             for con in concepts:
-                img_fea = torch.load('/ssd_scratch/cvit/avani.gupta/dino_fea_'+str(self.input_shape[0])+'by'+str(self.input_shape[1])+'/'+con+'all.pt').cuda()[:self.num_imgs]
+                img_fea = torch.load(DATA_PATH+f'dino_fea_'+str(self.input_shape[0])+'by'+str(self.input_shape[1])+'/'+con+'all.pt').cuda()[:self.num_imgs]
                 stu_pred = torch.load(f"/ssd_scratch/cvit/avani.gupta/{self.prefix}acts_"+self.model_type+self.bottleneck_name+'/'+con+'all.pt').cuda()[:self.num_imgs]
                 fea_s = img_fea.shape
                 for i in range(min(len(stu_pred), len(img_fea))):
@@ -170,7 +171,7 @@ class CD():
                 # val_loss_lis = []
                 # with torch.no_grad():
                 #     for con in concepts:
-                #         img_fea = torch.load('/ssd_scratch/cvit/avani.gupta/dino_fea_'+str(self.input_shape[0])+'by'+str(self.input_shape[1])+'/'+con+'all.pt').cuda()[self.num_imgs-20:]
+                #         img_fea = torch.load(DATA_PATH+'dino_fea_'+str(self.input_shape[0])+'by'+str(self.input_shape[1])+'/'+con+'all.pt').cuda()[self.num_imgs-20:]
                 #         stu_pred = torch.load("/ssd_scratch/cvit/avani.gupta/acts_"+self.model_type+self.bottleneck_name+'/'+con+'all.pt').cuda()[self.num_imgs-20:]
                 #         fea_s = img_fea.shape
                 #         for i in range(min(len(stu_pred), len(img_fea))):
@@ -195,7 +196,7 @@ class CD():
                 #     voil_count = 0
             print("ep",ep," loss",np.mean(loss_lis))
         
-        path = f'/ssd_scratch/cvit/avani.gupta/teacher_2{self.prefix}/'+self.dset+'pairs_vals'+str(self.pairs_vals)
+        path = DATA_PATH+'teacher_2{self.prefix}/'+self.dset+'pairs_vals'+str(self.pairs_vals)
         if not os.path.exists(path):
             os.makedirs(path)
 
@@ -219,22 +220,22 @@ class CD():
                     acts = {}
                     fc_save_path = None
                     if self.hparams["cav_space"] == 'mapped_teacher':
-                        acts[con] = torch.load('/ssd_scratch/cvit/avani.gupta/dino_fea_'+str(self.input_shape[0])+'by'+str(self.input_shape[0])+'/'+con+'all.pt')[:self.num_imgs]
-                        acts[neg_con] = torch.load('/ssd_scratch/cvit/avani.gupta/dino_fea_'+str(self.input_shape[0])+'by'+str(self.input_shape[0])+'/'+neg_con+'all.pt')[:self.num_imgs]
+                        acts[con] = torch.load(DATA_PATH+'dino_fea_'+str(self.input_shape[0])+'by'+str(self.input_shape[0])+'/'+con+'all.pt')[:self.num_imgs]
+                        acts[neg_con] = torch.load(DATA_PATH+'dino_fea_'+str(self.input_shape[0])+'by'+str(self.input_shape[0])+'/'+neg_con+'all.pt')[:self.num_imgs]
                         with torch.no_grad():
                             acts[con] = self.downconv_m(acts[con].cuda())
                             acts[neg_con] = self.downconv_m(acts[neg_con].cuda())
-                        self.fc_save_path = f'/ssd_scratch/cvit/avani.gupta/fc/dino_mapped_to_{self.prefix}stu_space_'+self.dset+'/'
+                        self.fc_save_path = DATA_PATH+f'fc/dino_mapped_to_{self.prefix}stu_space_'+self.dset+'/'
 
                     elif self.hparams["cav_space"] == 'student' or self.hparams["cav_space"] == 'debiased_student':
                         acts[con] = torch.load(f"/ssd_scratch/cvit/avani.gupta/{self.prefix}acts_"+self.model_type+self.bottleneck_name+'/'+con+'all.pt')[:self.num_imgs]
                         acts[neg_con] = torch.load(f"/ssd_scratch/cvit/avani.gupta/{self.prefix}acts_"+self.model_type+self.bottleneck_name+'/'+neg_con+'all.pt')[:self.num_imgs]
-                        self.fc_save_path = f'/ssd_scratch/cvit/avani.gupta/fc/{self.prefix}student_space_'+self.dset+'/'
+                        self.fc_save_path = DATA_PATH+f'fc/{self.prefix}student_space_'+self.dset+'/'
                     
                     elif self.hparams["cav_space"] == 'teacher':
-                        acts[con] =  torch.load('/ssd_scratch/cvit/avani.gupta/dino_fea_'+str(self.input_shape[0])+'by'+str(self.input_shape[1])+'/'+con+'all.pt').cuda()[:self.num_imgs]
-                        acts[neg_con] =  torch.load('/ssd_scratch/cvit/avani.gupta/dino_fea_'+str(self.input_shape[0])+'by'+str(self.input_shape[1])+'/'+neg_con+'all.pt').cuda()[:self.num_imgs]
-                        self.fc_save_path = '/ssd_scratch/cvit/avani.gupta/fc/direct_dino_pca_space_'+self.dset+'/'
+                        acts[con] =  torch.load(DATA_PATH+'dino_fea_'+str(self.input_shape[0])+'by'+str(self.input_shape[1])+'/'+con+'all.pt').cuda()[:self.num_imgs]
+                        acts[neg_con] =  torch.load(DATA_PATH+'dino_fea_'+str(self.input_shape[0])+'by'+str(self.input_shape[1])+'/'+neg_con+'all.pt').cuda()[:self.num_imgs]
+                        self.fc_save_path = DATA_PATH+'fc/direct_dino_pca_space_'+self.dset+'/'
 
                     print(self.fc_save_path)
                     if not os.path.exists(self.fc_save_path):
@@ -265,7 +266,7 @@ class CD():
         proto_dic = self.proto_dic
         if self.model_type =='resnet50': ##diff procedure for updating resnet50 proto
             for c in tqdm(self.class_labels):
-                classdataset = ClassWiseImgsDataset(path='/ssd_scratch/cvit/avani.gupta/Imagenet2012/Imagenet-sample/train/'+self.hparams["label_to_class"][c],shape=(224,224),transform=self.hparams["transforms"])
+                classdataset = ClassWiseImgsDataset(path=DATA_PATH+'Imagenet2012/Imagenet-sample/train/'+self.hparams["label_to_class"][c],shape=(224,224),transform=self.hparams["transforms"])
                 classdataloader = torch.utils.data.DataLoader(classdataset, batch_size=4,
                                                             shuffle=False, num_workers=0)
                 acts_ = []
@@ -564,7 +565,7 @@ parser.add_argument('--use_cdepcolor', type=int, default=1, help='whether to use
 parser.add_argument('--teach_mapped_to_stu', type=int, default=1)
 parser.add_argument('--cdep_grad_method', type=int, default=1, help='grad method cdep')
 parser.add_argument('--cav_space', type=str, default='student', help='cav_space: teacher, student, mapped_teacher, debiased_student')
-parser.add_argument('--checkpoints_dir', type=str, default='/ssd_scratch/cvit/avani.gupta/new_checkpoints/', help='models are saved here')
+parser.add_argument('--checkpoints_dir', type=str, default=DATA_PATH+'new_checkpoints/', help='models are saved here')
 # sys.argv = ['']
 # parser.set_defaults(verbose=False)
 hparams = parser.parse_args()
@@ -589,7 +590,7 @@ if  model_type == 'resnet50':
     model = resnet50(pretrained=True)
     model = model.cuda()
     bs = 32
-    imagenet_zip_path = '/ssd_scratch/cvit/avani.gupta/Imagenet2012/Imagenet-sample/'
+    imagenet_zip_path = DATA_PATH+'Imagenet2012/Imagenet-sample/'
     with open('imagenet_class_index.json', "r") as f:
         data = json.load(f)
     label_mapping = {}
@@ -751,7 +752,7 @@ if model_type =='colormnist':
     shape = (28,28)
     if not hparams["train_from_scratch"]:
         if hparams['cav_space']=='debiased_student':
-            model.load_state_dict(torch.load('/ssd_scratch/cvit/avani.gupta/acc46.03best_val_acc45.28highest_epoch0iter0colormnistmnistp8nimg150lr0.01rr0.3wtcav5bs44pwt0.3upr1cd1precalc1up1scratch0uknn1cwt0s42corr'))
+            model.load_state_dict(torch.load(DATA_PATH+'acc46.03best_val_acc45.28highest_epoch0iter0colormnistmnistp8nimg150lr0.01rr0.3wtcav5bs44pwt0.3upr1cd1precalc1up1scratch0uknn1cwt0s42corr'))
         else:
             model.load_state_dict(torch.load('mnist/ColorMNIST/orig_model_colorMNIST.pt'))
 
