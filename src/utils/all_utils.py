@@ -1,27 +1,167 @@
-from multiprocessing.spawn import import_main_path
+import os
+import glob
 import pickle
+import json
 import random
 import shutil
 import numpy as np
-import torch.nn as nn
-import numpy as np
 import matplotlib.pyplot as plt
-import os.path
-import pickle
-import numpy as np
-from six.moves import range
+import cv2
+import yaml
 from tqdm import tqdm
-# import tensorflow as tf
-import cv2
+from io import StringIO 
+from sklearn import linear_model, svm
+from sklearn import metrics
+from sklearn.model_selection import train_test_split
+from six.moves import range
+from torch import nn, optim
 import torch
-import torch.nn as nn
-import os
-import cv2
+import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
-import glob
-import torch.utils.data as tutils
-from .imdb_classi_test import *
+import torchvision.transforms as transforms
 from torchvision.models import resnet18
+from PIL import Image
+
+import numpy as np # linear algebra
+import pandas as pd
+from torchvision import datasets, models, transforms
+
+
+DATA_PATH = '/media/Data2/avani.gupta/'
+class IMDBTestDataSet(Dataset):
+    def __init__(self, transforms):
+        
+        self.data_dir = DATA_PATH+'imdb_crop/'
+        path = '/home/avani.gupta/tcav_pt/learning-not-to-learn/dataset/IMDB/IMDB_with_bias/'
+        img_df = pd.read_csv(path+'test_list.csv')
+        self.image_list = img_df['img_name'].values
+        self.labels = img_df['gender'].values
+        self.transforms = transforms
+        
+    def __len__(self):
+        return len(self.image_list)
+    
+    def __getitem__(self,idx):
+        path = self.data_dir+self.image_list[idx]
+        lb = self.labels[idx]
+        image = plt.imread(path)
+        if len(image.shape) == 2: #2d img
+            image = np.expand_dims(image,axis=0)
+            image = torch.from_numpy(np.concatenate((image,image,image))).float()
+        else: #3ch img
+            image = torch.from_numpy(np.transpose(plt.imread(path),(2,0,1))/255.0).float()
+        if self.transforms:
+            image = self.transforms(image)
+        return image, torch.tensor(lb).float()
+
+
+class CatTestDataSet(Dataset):
+    def __init__(self, transforms):
+        self.data_dir = DATA_PATH+'dog_cats/test/'
+        self.image_list = os.listdir(self.data_dir)
+        self.transforms = transforms
+        
+    def __len__(self):
+        return len(self.image_list)
+
+    
+    def __getitem__(self,idx):
+        path = self.data_dir+self.image_list[idx]
+        # print(path)
+        image = torch.from_numpy(np.transpose(plt.imread(path),(2,0,1))/255.0).float()
+        # print(image.max(),image.min())
+        if self.transforms:
+            image = self.transforms(image)
+        return path.split('/')[-1].replace('.jpg',''),image
+
+# from da import IMDBBiasedDataSet,  CatBiasedDataSet
+
+if __name__ == '__main__':
+    import csv
+    fields = ['name', 'acc']
+    rows = []
+
+    bs = 512
+    for dset in ['cat_dog']:
+        for bias in ['1','2']:
+            if bias == "1":
+                opp = "2"
+            else:
+                opp = "1"
+            if dset =='cat_dog':
+                bias = "TB"+bias
+                opp_bias = "TB"+opp
+            else:
+                bias = "EB"+bias
+                opp_bias = "EB"+opp
+
+            # bias = 'TB1'
+            # dset = 'cat_dog'
+            test_on_biased_other = True
+            data_transform = transforms.Compose([transforms.RandomResizedCrop(224),
+                    transforms.RandomHorizontalFlip(),
+                    transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                        std=[0.229, 0.224, 0.225])
+                ])
+            if test_on_biased_other:
+                if dset == "cat_dog":
+                    ds = CatBiasedDataSet(data_transform,opp_bias)
+                else:
+                    ds = IMDBBiasedDataSet(data_transform,opp_bias)
+
+            test_dl = DataLoader(ds, bs)
+            model = models.resnet18(pretrained=True)
+            
+            in_feats = model.fc.in_features
+            model.fc = nn.Linear(in_feats, 1)
+            for n in glob.glob(DATA_PATH+''+dset+'_model_transfer_learn'+bias+'*.pt'):
+                try:
+                    model.load_state_dict(torch.load(n))
+                    model = model.cuda()
+                    model.eval()
+                    if test_on_biased_other:
+                        criterion = nn.BCEWithLogitsLoss()
+                        val_total = 0
+                        val_correct = 0
+                        val_running_loss = 0.0
+                        with torch.no_grad():
+                            for i, (val_images, val_labels) in tqdm(enumerate(test_dl)):
+                                val_logits = model(val_images.cuda())
+                                val_labels = val_labels.view(len(val_labels), 1).cuda()
+                                predicted = torch.sigmoid(val_logits)>0.5
+                                val_correct += (predicted == val_labels).sum().item()
+                                val_total += val_labels.shape[0]
+                        acc = val_correct/val_total
+                        print(n,acc)
+                        rows.append([n,acc])
+                except Exception as e:
+                    print(e,n)
+
+    import time
+    timestr = time.strftime("%Y%m%d-%H%M%S")
+    with open('imdb_direct_'+timestr+'.csv', 'w') as csvfile: 
+        csvwriter = csv.writer(csvfile) 
+        csvwriter.writerow(fields) 
+        csvwriter.writerows(rows)
+
+                # if dset == 'cat_dog' and not test_on_biased_other:
+                #     criterion = nn.BCEWithLogitsLoss()
+                #     val_total = 0
+                #     val_correct = 0
+                #     val_running_loss = 0.0
+                #     preds = []
+                #     img_paths = []
+                #     with torch.no_grad():
+                #         for i, (paths, val_images) in enumerate(test_dl):
+                #             val_logits = torch.sigmoid(model(val_images.cuda()))
+                #             preds.extend(val_logits.flatten())
+                #             img_paths.extend(paths)
+                #     preds = torch.stack(preds)
+                #     preds = preds.cpu().numpy()
+                #     dic = {'id':img_paths, 'label':preds}
+                #     df= pd.DataFrame(dic)
+                #     df.to_csv('tb1_orig_pred.csv',index=False)
+
 
 
 class ClassWiseImgsDataset(Dataset):
@@ -95,7 +235,7 @@ def load_image_from_file(filename, shape=(384,512),convert_srgb=False):
         print("eror in reading img", filename)
         return []
       
-def split_concept(con, path='/media/Data2/avani.gupta/IID_data/concepts/'):
+def split_concept(con, path=DATA_PATH+'IID_data/concepts/'):
     '''
     splits concept folder
     '''
@@ -120,23 +260,24 @@ def get_bt_name(model_type):
         return 'conv2'
 
 def get_affect_lis(model_type,concept_lis):
+    # if model_type=='pacs':
     return np.zeros(len(concept_lis))
 
 def get_pairs(model_type,concept_set_type=None):
-    # if model_type =='resnet50':
-    #     if concept_set_type == 'textures_train':
-    #         pairs = {"textures_train":[("textures_train","random_discovery_imagenet_train")]}
+    if model_type =='resnet50':
+        if concept_set_type == 'textures_train':
+            pairs = {"textures_train":[("textures_train","random_discovery_imagenet_train")]}
         
-    #     if concept_set_type == 'textures':
-    #         pairs = {"textures":[("textures","random_discovery_imagenet")]}
+        if concept_set_type == 'textures':
+            pairs = {"textures":[("textures","random_discovery_imagenet")]}
 
-    # elif model_type =='pacs':
-    #     if concept_set_type =='0':
-    #         pairs = {"paintings":[("paintings","randoms_da"),("paintings","randoms_da2")],"sketches":[("sketches","randoms_da"),("sketches","randoms_da2")],"cartoons":[("cartoons","randoms_da"),("cartoons","randoms_da2")]}
-    #     if concept_set_type =='1':
-            # pairs = {"art_painting":[("art_painting","randoms_da"),("art_painting","randoms_da2")],"sketch":[("sketch","randoms_da"),("sketch","randoms_da2")],"cartoon":[("cartoon","randoms_da"),("cartoon","randoms_da2")]}
+    elif model_type =='pacs':
+        if concept_set_type =='0':
+            pairs = {"paintings":[("paintings","randoms_da"),("paintings","randoms_da2")],"sketches":[("sketches","randoms_da"),("sketches","randoms_da2")],"cartoons":[("cartoons","randoms_da"),("cartoons","randoms_da2")]}
+        if concept_set_type =='1':
+            pairs = {"art_painting":[("art_painting","randoms_da"),("art_painting","randoms_da2")],"sketch":[("sketch","randoms_da"),("sketch","randoms_da2")],"cartoon":[("cartoon","randoms_da"),("cartoon","randoms_da2")]}
            
-    if model_type == 'faces':
+    elif model_type == 'faces':
         if concept_set_type=='8':
             pairs = {"old":[('old','randoms20')],
                     'young':[('young','randoms20')]}
@@ -162,148 +303,148 @@ def get_pairs(model_type,concept_set_type=None):
         #     pairs = {"young_women":[("young_women","old_women")],"old_women":[("old_women","all_women")],"old_men":[("old_men","young_men")],"young_men":[("old_men","young_men")]}
 
 
-    # elif model_type =='cat_dog':
-    #     if concept_set_type =='0':
-    #         pairs = {'colors0': [('colors0', 'gray_mixed')],
-    #             'colors1': [('colors1', 'gray_mixed')],
-    #             'colors2': [('colors2', 'gray_mixed')],
-    #             'colors3': [('colors3', 'gray_mixed')]}
+    elif model_type =='cat_dog':
+        if concept_set_type =='0':
+            pairs = {'colors0': [('colors0', 'gray_mixed')],
+                'colors1': [('colors1', 'gray_mixed')],
+                'colors2': [('colors2', 'gray_mixed')],
+                'colors3': [('colors3', 'gray_mixed')]}
         
-    #     if concept_set_type =='1':
-    #         pairs = {'bright_cats': [('bright_cats', 'mixed')],
-    #             'bright_dogs': [('bright_dogs', 'mixed')],
-    #             'dark_cats': [('dark_cats', 'mixed')],
-    #             'dark_dogs': [('dark_dogs', 'mixed')]}
+        if concept_set_type =='1':
+            pairs = {'bright_cats': [('bright_cats', 'mixed')],
+                'bright_dogs': [('bright_dogs', 'mixed')],
+                'dark_cats': [('dark_cats', 'mixed')],
+                'dark_dogs': [('dark_dogs', 'mixed')]}
 
-    #     if concept_set_type == '2':
-    #        pairs = {'lightest_colorpatches0': [('lightest_colorpatches0', 'colors0')],
-    #             'lightest_colorpatches1': [('lightest_colorpatches1', 'colors1')],
-    #             'lightest_colorpatches2': [('lightest_colorpatches2', 'colors2')],
-    #             'lightest_colorpatches3': [('lightest_colorpatches3', 'colors3')]}
+        if concept_set_type == '2':
+           pairs = {'lightest_colorpatches0': [('lightest_colorpatches0', 'colors0')],
+                'lightest_colorpatches1': [('lightest_colorpatches1', 'colors1')],
+                'lightest_colorpatches2': [('lightest_colorpatches2', 'colors2')],
+                'lightest_colorpatches3': [('lightest_colorpatches3', 'colors3')]}
 
-    # elif model_type =='clever_hans7':
-    #     if concept_set_type == None or concept_set_type=='0':
-    #         pairs = {'gray_1':[('gray_1','randoms')], 'gray_2':[('gray_2','randoms')], 'gray_3':[('gray_3','randoms')], 'gray_4':[('gray_4','randoms')], 'gray_5':[('gray_5','randoms')], 'metal':[('metal','randoms2')],'small_cyan_cubes':[('small_cyan_cubes', 'randoms')]}
-    #     if concept_set_type == '2':
-    #         pairs = {'gray_1':[('gray_1','randoms')], 'gray_2':[('gray_2','randoms')], 'gray_3':[('gray_3','randoms')], 'gray_4':[('gray_4','randoms')], 'gray_5':[('gray_5','randoms')]}
-    #         with open('small_cubes.json','r') as f:
-    #             pairs.update(json.load(f))
-    #         with open('small_cyan_cubes.json','r') as f:
-    #             pairs.update(json.load(f))
-    #         pairs.update({'metal': [('metal', 'randoms20'),
-    #                     ('metal', 'randoms21'),
-    #                     ('metal', 'randoms22'),
-    #                     ('metal', 'randoms23'),
-    #                     ('metal', 'randoms24'),
-    #                     ('metal', 'randoms25'),
-    #                     ('metal', 'randoms26'),
-    #                     ('metal', 'randoms27')]})
+    elif model_type =='clever_hans7':
+        if concept_set_type == None or concept_set_type=='0':
+            pairs = {'gray_1':[('gray_1','randoms')], 'gray_2':[('gray_2','randoms')], 'gray_3':[('gray_3','randoms')], 'gray_4':[('gray_4','randoms')], 'gray_5':[('gray_5','randoms')], 'metal':[('metal','randoms2')],'small_cyan_cubes':[('small_cyan_cubes', 'randoms')]}
+        if concept_set_type == '2':
+            pairs = {'gray_1':[('gray_1','randoms')], 'gray_2':[('gray_2','randoms')], 'gray_3':[('gray_3','randoms')], 'gray_4':[('gray_4','randoms')], 'gray_5':[('gray_5','randoms')]}
+            with open('small_cubes.json','r') as f:
+                pairs.update(json.load(f))
+            with open('small_cyan_cubes.json','r') as f:
+                pairs.update(json.load(f))
+            pairs.update({'metal': [('metal', 'randoms20'),
+                        ('metal', 'randoms21'),
+                        ('metal', 'randoms22'),
+                        ('metal', 'randoms23'),
+                        ('metal', 'randoms24'),
+                        ('metal', 'randoms25'),
+                        ('metal', 'randoms26'),
+                        ('metal', 'randoms27')]})
 
 
-    # elif model_type =='clever_hans':
-    #     if concept_set_type == None or concept_set_type=='0':
-    #         pairs = {'gray_1':[('gray_1','randoms')], 'gray_2':[('gray_2','randoms')], 'gray_3':[('gray_3','randoms')], 'gray_4':[('gray_4','randoms')], 'gray_5':[('gray_5','randoms')], 'metal':[('metal','randoms2')]}
-    #     if concept_set_type == '2':
-    #         pairs = {'gray_1':[('gray_1','randoms')], 'gray_2':[('gray_2','randoms')], 'gray_3':[('gray_3','randoms')], 'gray_4':[('gray_4','randoms')], 'gray_5':[('gray_5','randoms')]}
-    #         pairs.update({'metal': [('metal', 'randoms20'),
-    #                     ('metal', 'randoms21'),
-    #                     ('metal', 'randoms22'),
-    #                     ('metal', 'randoms23'),
-    #                     ('metal', 'randoms24'),
-    #                     ('metal', 'randoms25'),
-    #                     ('metal', 'randoms26'),
-    #                     ('metal', 'randoms27')]})
+    elif model_type =='clever_hans':
+        if concept_set_type == None or concept_set_type=='0':
+            pairs = {'gray_1':[('gray_1','randoms')], 'gray_2':[('gray_2','randoms')], 'gray_3':[('gray_3','randoms')], 'gray_4':[('gray_4','randoms')], 'gray_5':[('gray_5','randoms')], 'metal':[('metal','randoms2')]}
+        if concept_set_type == '2':
+            pairs = {'gray_1':[('gray_1','randoms')], 'gray_2':[('gray_2','randoms')], 'gray_3':[('gray_3','randoms')], 'gray_4':[('gray_4','randoms')], 'gray_5':[('gray_5','randoms')]}
+            pairs.update({'metal': [('metal', 'randoms20'),
+                        ('metal', 'randoms21'),
+                        ('metal', 'randoms22'),
+                        ('metal', 'randoms23'),
+                        ('metal', 'randoms24'),
+                        ('metal', 'randoms25'),
+                        ('metal', 'randoms26'),
+                        ('metal', 'randoms27')]})
 
     
-    # elif model_type =='toy' or model_type =='toy_conv':
-    #     pairs = {'star_pos_changing':[('star_pos_changing','randoms')], 'moon_pos_changing':[('moon_pos_changing','randoms')]}
+    elif model_type =='toy' or model_type =='toy_conv':
+        pairs = {'star_pos_changing':[('star_pos_changing','randoms')], 'moon_pos_changing':[('moon_pos_changing','randoms')]}
     
     elif model_type=='cg' or model_type=='iiww':
         with open('pairs/pairs_large.pickle', 'rb') as handle:
             pairs = pickle.load(handle)
     
     elif model_type == 'decoymnist':
-        # if concept_set_type == '11':
-        #     pairs = {'0_decoy_align': [('0_decoy_align', '0_decoy_conflict')],
-        #             '1_decoy_align': [('1_decoy_align', '1_decoy_conflict')],
-        #             '2_decoy_align': [('2_decoy_align', '2_decoy_conflict')],
-        #             '3_decoy_align': [('3_decoy_align', '3_decoy_conflict')],
-        #             '4_decoy_align': [('4_decoy_align', '4_decoy_conflict')],
-        #             '5_decoy_align': [('5_decoy_align', '5_decoy_conflict')],
-        #             '6_decoy_align': [('6_decoy_align', '6_decoy_conflict')],
-        #             '7_decoy_align': [('7_decoy_align', '7_decoy_conflict')],
-        #             '8_decoy_align': [('8_decoy_align', '8_decoy_conflict')],
-        #             '9_decoy_align': [('9_decoy_align', '9_decoy_conflict')],
-        #             'gray_digits':[('gray_digits','randoms')], 'gray_1':[('gray_1','randoms')], 'gray_2':[('gray_2','randoms')], 'gray_3':[('gray_3','randoms')], 'gray_4':[('gray_4','randoms')], 'gray_5':[('gray_5','randoms')]}
+        if concept_set_type == '11':
+            pairs = {'0_decoy_align': [('0_decoy_align', '0_decoy_conflict')],
+                    '1_decoy_align': [('1_decoy_align', '1_decoy_conflict')],
+                    '2_decoy_align': [('2_decoy_align', '2_decoy_conflict')],
+                    '3_decoy_align': [('3_decoy_align', '3_decoy_conflict')],
+                    '4_decoy_align': [('4_decoy_align', '4_decoy_conflict')],
+                    '5_decoy_align': [('5_decoy_align', '5_decoy_conflict')],
+                    '6_decoy_align': [('6_decoy_align', '6_decoy_conflict')],
+                    '7_decoy_align': [('7_decoy_align', '7_decoy_conflict')],
+                    '8_decoy_align': [('8_decoy_align', '8_decoy_conflict')],
+                    '9_decoy_align': [('9_decoy_align', '9_decoy_conflict')],
+                    'gray_digits':[('gray_digits','randoms')], 'gray_1':[('gray_1','randoms')], 'gray_2':[('gray_2','randoms')], 'gray_3':[('gray_3','randoms')], 'gray_4':[('gray_4','randoms')], 'gray_5':[('gray_5','randoms')]}
 
-        # if concept_set_type==None or concept_set_type=='-2':
-        #     pairs = {'gray_digits':[('gray_digits','randoms')], 'gray_1':[('gray_1','randoms')], 'gray_2':[('gray_2','randoms')], 'gray_3':[('gray_3','randoms')], 'gray_4':[('gray_4','randoms')], 'gray_5':[('gray_5','randoms')]}
+        if concept_set_type==None or concept_set_type=='-2':
+            pairs = {'gray_digits':[('gray_digits','randoms')], 'gray_1':[('gray_1','randoms')], 'gray_2':[('gray_2','randoms')], 'gray_3':[('gray_3','randoms')], 'gray_4':[('gray_4','randoms')], 'gray_5':[('gray_5','randoms')]}
         if concept_set_type=='5':
             pairs = {'gray_1':[('gray_1','randoms')], 'gray_2':[('gray_2','randoms')], 'gray_3':[('gray_3','randoms')], 'gray_4':[('gray_4','randoms')], 'gray_5':[('gray_5','randoms')]}
-        # if concept_set_type=='10':
-        #     pairs = {'0_decoy_align': [('0_decoy_align', '0_decoy_conflict')],
-        #             '1_decoy_align': [('1_decoy_align', '1_decoy_conflict')],
-        #             '2_decoy_align': [('2_decoy_align', '2_decoy_conflict')],
-        #             '3_decoy_align': [('3_decoy_align', '3_decoy_conflict')],
-        #             '4_decoy_align': [('4_decoy_align', '4_decoy_conflict')],
-        #             '5_decoy_align': [('5_decoy_align', '5_decoy_conflict')],
-        #             '6_decoy_align': [('6_decoy_align', '6_decoy_conflict')],
-        #             '7_decoy_align': [('7_decoy_align', '7_decoy_conflict')],
-        #             '8_decoy_align': [('8_decoy_align', '8_decoy_conflict')],
-        #             '9_decoy_align': [('9_decoy_align', '9_decoy_conflict')]}
+        if concept_set_type=='10':
+            pairs = {'0_decoy_align': [('0_decoy_align', '0_decoy_conflict')],
+                    '1_decoy_align': [('1_decoy_align', '1_decoy_conflict')],
+                    '2_decoy_align': [('2_decoy_align', '2_decoy_conflict')],
+                    '3_decoy_align': [('3_decoy_align', '3_decoy_conflict')],
+                    '4_decoy_align': [('4_decoy_align', '4_decoy_conflict')],
+                    '5_decoy_align': [('5_decoy_align', '5_decoy_conflict')],
+                    '6_decoy_align': [('6_decoy_align', '6_decoy_conflict')],
+                    '7_decoy_align': [('7_decoy_align', '7_decoy_conflict')],
+                    '8_decoy_align': [('8_decoy_align', '8_decoy_conflict')],
+                    '9_decoy_align': [('9_decoy_align', '9_decoy_conflict')]}
         return pairs
             
     elif model_type=='colormnist':
         print("********************************",concept_set_type)
-        # if concept_set_type=='8':
-        #     pairs = {'biased_color0': [('biased_color0', 'randoms')],
-        #     'biased_color1': [('biased_color1', 'randoms')],
-        #     'biased_color2': [('biased_color2', 'randoms')],
-        #     'biased_color3': [('biased_color3', 'randoms')],
-        #     'biased_color4': [('biased_color4', 'randoms')],
-        #     'biased_color5': [('biased_color5', 'randoms')],
-        #     'biased_color6': [('biased_color6', 'randoms')],
-        #     'biased_color7': [('biased_color7', 'randoms')],
-        #     'biased_color8': [('biased_color8', 'randoms')],
-        #     'biased_color9': [('biased_color9', 'randoms')]}
-        #     return pairs
-        # if concept_set_type == '11':
-        #     pairs = {'0': [('0', '0_conflict')],
-        #             '1': [('1', '1_conflict')],
-        #             '2': [('2', '2_conflict')],
-        #             '3': [('3', '3_conflict')],
-        #             '4': [('4', '4_conflict')],
-        #             '5': [('5', '5_conflict')],
-        #             '6': [('6', '6_conflict')],
-        #             '7': [('7', '7_conflict')],
-        #             '8': [('8', '8_conflict')],
-        #             '9': [('9', '9_conflict')],
-        #             'biased_color0': [('biased_color0', 'randoms')],
-        #             'biased_color1': [('biased_color1', 'randoms')],
-        #             'biased_color2': [('biased_color2', 'randoms')],
-        #             'biased_color3': [('biased_color3', 'randoms')],
-        #             'biased_color4': [('biased_color4', 'randoms')],
-        #             'biased_color5': [('biased_color5', 'randoms')],
-        #             'biased_color6': [('biased_color6', 'randoms')],
-        #             'biased_color7': [('biased_color7', 'randoms')],
-        #             'biased_color8': [('biased_color8', 'randoms')],
-        #             'biased_color9': [('biased_color9', 'randoms')]}
-        #     return pairs
-        # if concept_set_type == '10':
-        #     pairs = {'0': [('0', '0_conflict')],
-        #             '1': [('1', '1_conflict')],
-        #             '2': [('2', '2_conflict')],
-        #             '3': [('3', '3_conflict')],
-        #             '4': [('4', '4_conflict')],
-        #             '5': [('5', '5_conflict')],
-        #             '6': [('6', '6_conflict')],
-        #             '7': [('7', '7_conflict')],
-        #             '8': [('8', '8_conflict')],
-        #             '9': [('9', '9_conflict')]}
-        #     return pairs
+        if concept_set_type=='8':
+            pairs = {'biased_color0': [('biased_color0', 'randoms')],
+            'biased_color1': [('biased_color1', 'randoms')],
+            'biased_color2': [('biased_color2', 'randoms')],
+            'biased_color3': [('biased_color3', 'randoms')],
+            'biased_color4': [('biased_color4', 'randoms')],
+            'biased_color5': [('biased_color5', 'randoms')],
+            'biased_color6': [('biased_color6', 'randoms')],
+            'biased_color7': [('biased_color7', 'randoms')],
+            'biased_color8': [('biased_color8', 'randoms')],
+            'biased_color9': [('biased_color9', 'randoms')]}
+            return pairs
+        if concept_set_type == '11':
+            pairs = {'0': [('0', '0_conflict')],
+                    '1': [('1', '1_conflict')],
+                    '2': [('2', '2_conflict')],
+                    '3': [('3', '3_conflict')],
+                    '4': [('4', '4_conflict')],
+                    '5': [('5', '5_conflict')],
+                    '6': [('6', '6_conflict')],
+                    '7': [('7', '7_conflict')],
+                    '8': [('8', '8_conflict')],
+                    '9': [('9', '9_conflict')],
+                    'biased_color0': [('biased_color0', 'randoms')],
+                    'biased_color1': [('biased_color1', 'randoms')],
+                    'biased_color2': [('biased_color2', 'randoms')],
+                    'biased_color3': [('biased_color3', 'randoms')],
+                    'biased_color4': [('biased_color4', 'randoms')],
+                    'biased_color5': [('biased_color5', 'randoms')],
+                    'biased_color6': [('biased_color6', 'randoms')],
+                    'biased_color7': [('biased_color7', 'randoms')],
+                    'biased_color8': [('biased_color8', 'randoms')],
+                    'biased_color9': [('biased_color9', 'randoms')]}
+            return pairs
+        if concept_set_type == '10':
+            pairs = {'0': [('0', '0_conflict')],
+                    '1': [('1', '1_conflict')],
+                    '2': [('2', '2_conflict')],
+                    '3': [('3', '3_conflict')],
+                    '4': [('4', '4_conflict')],
+                    '5': [('5', '5_conflict')],
+                    '6': [('6', '6_conflict')],
+                    '7': [('7', '7_conflict')],
+                    '8': [('8', '8_conflict')],
+                    '9': [('9', '9_conflict')]}
+            return pairs
                     
-        # if concept_set_type == None or concept_set_type =='-2':
-        #     pairs = {'color_digits':[('color_digits','randoms'),('color_digits','gray_digits')],'colors1':[('colors1','gray_1')],'colors2':[('colors2','gray_2')], 'colors3':[('colors3','gray_3')], 'colors4':[('colors4','gray_4')], 'colors5':[('colors5','gray_5')]}
+        if concept_set_type == None or concept_set_type =='-2':
+            pairs = {'color_digits':[('color_digits','randoms'),('color_digits','gray_digits')],'colors1':[('colors1','gray_1')],'colors2':[('colors2','gray_2')], 'colors3':[('colors3','gray_3')], 'colors4':[('colors4','gray_4')], 'colors5':[('colors5','gray_5')]}
         if concept_set_type == '2':
             pairs = {'colors1':[('colors1','gray_1')],'colors2':[('colors2','gray_2')], 'colors3':[('colors3','gray_3')], 'colors4':[('colors4','gray_4')], 'colors5':[('colors5','gray_5')]}
         if concept_set_type == '0': #red zero with 9 colored zeros
@@ -319,31 +460,31 @@ def get_pairs(model_type,concept_set_type=None):
                     '9': [('9', '9_9colored')]}
             return pairs
 
-        # if concept_set_type == '1':
-        #     pairs = {'0': [('0', '0_gray')],
-        #             '1': [('1', '1_gray')],
-        #             '2': [('2', '2_gray')],
-        #             '3': [('3', '3_gray')],
-        #             '4': [('4', '4_gray')],
-        #             '5': [('5', '5_gray')],
-        #             '6': [('6', '6_gray')],
-        #             '7': [('7', '7_gray')],
-        #             '8': [('8', '8_gray')],
-        #             '9': [('9', '9_gray')]}
-            # return pairs
+        if concept_set_type == '1':
+            pairs = {'0': [('0', '0_gray')],
+                    '1': [('1', '1_gray')],
+                    '2': [('2', '2_gray')],
+                    '3': [('3', '3_gray')],
+                    '4': [('4', '4_gray')],
+                    '5': [('5', '5_gray')],
+                    '6': [('6', '6_gray')],
+                    '7': [('7', '7_gray')],
+                    '8': [('8', '8_gray')],
+                    '9': [('9', '9_gray')]}
+            return pairs
 
-        # if concept_set_type=='7':
-        #     pairs = {'biased_color0': [('biased_color0', 'randoms_colored')],
-        #     'biased_color1': [('biased_color1', 'randoms_colored')],
-        #     'biased_color2': [('biased_color2', 'randoms_colored')],
-        #     'biased_color3': [('biased_color3', 'randoms_colored')],
-        #     'biased_color4': [('biased_color4', 'randoms_colored')],
-        #     'biased_color5': [('biased_color5', 'randoms_colored')],
-        #     'biased_color6': [('biased_color6', 'randoms_colored')],
-        #     'biased_color7': [('biased_color7', 'randoms_colored')],
-        #     'biased_color8': [('biased_color8', 'randoms_colored')],
-        #     'biased_color9': [('biased_color9', 'randoms_colored')]}
-            # return pairs
+        if concept_set_type=='7':
+            pairs = {'biased_color0': [('biased_color0', 'randoms_colored')],
+            'biased_color1': [('biased_color1', 'randoms_colored')],
+            'biased_color2': [('biased_color2', 'randoms_colored')],
+            'biased_color3': [('biased_color3', 'randoms_colored')],
+            'biased_color4': [('biased_color4', 'randoms_colored')],
+            'biased_color5': [('biased_color5', 'randoms_colored')],
+            'biased_color6': [('biased_color6', 'randoms_colored')],
+            'biased_color7': [('biased_color7', 'randoms_colored')],
+            'biased_color8': [('biased_color8', 'randoms_colored')],
+            'biased_color9': [('biased_color9', 'randoms_colored')]}
+            return pairs
 
         
         
@@ -387,58 +528,93 @@ def get_pairs(model_type,concept_set_type=None):
     # elif model_type =='isic' or model_type =='isic_vgg':
     #     pairs = {'colors1':[('colors1','randoms2')],'colors2':[('colors2','randoms2')], 'colors3':[('colors3','randoms2')], 'colors4':[('colors4','randoms2')], 'colors5':[('colors5','randoms2')]}
 
-    # elif model_type =='isic' or model_type =='isic_vgg':
-    #     pairs = {'colors1':[('colors1','gray_1')],'colors2':[('colors2','gray_2')], 'colors3':[('colors3','gray_3')], 'colors4':[('colors4','gray_4')], 'colors5':[('colors5','gray_5')]}
-    #     # pairs = {'colors1':[('colors1','randoms2')],'colors2':[('colors2','randoms2')], 'colors3':[('colors3','randoms2')], 'colors4':[('colors4','randoms2')], 'colors5':[('colors5','randoms2')]}
+    elif model_type =='isic' or model_type =='isic_vgg':
+        pairs = {'colors1':[('colors1','gray_1')],'colors2':[('colors2','gray_2')], 'colors3':[('colors3','gray_3')], 'colors4':[('colors4','gray_4')], 'colors5':[('colors5','gray_5')]}
+        # pairs = {'colors1':[('colors1','randoms2')],'colors2':[('colors2','randoms2')], 'colors3':[('colors3','randoms2')], 'colors4':[('colors4','randoms2')], 'colors5':[('colors5','randoms2')]}
 
-    # elif model_type =='cat_dog':
-    #     with open('light_concept.json','r') as f:
-    #         pairs = json.load(f)
-    #     with open('dark_concept.json','r') as f:
-    #         pairs.update(json.load(f))
+    elif model_type =='cat_dog':
+        with open('light_concept.json','r') as f:
+            pairs = json.load(f)
+        with open('dark_concept.json','r') as f:
+            pairs.update(json.load(f))
 
-    # elif model_type =='imdb':
-    #     with open('age_concept.json','r') as f:
-    #         pairs = json.load(f)
+    elif model_type =='imdb':
+        with open('age_concept.json','r') as f:
+            pairs = json.load(f)
     return pairs
 
 
-# def get_concepts(model_type, test_env_idx): 
+def get_concepts(model_type, test_env_idx): 
     
-#     if model_type=='PACS':
-#         domains = {"A":"paintings", "C":"cartoons", "P":"photos", "S":"sketches"}
-#         domain_vals = list(domains.values())
-#         return domain_vals[:test_env_idx]+domain_vals[test_env_idx+1:]
+    if model_type=='PACS':
+        domains = {"A":"paintings", "C":"cartoons", "P":"photos", "S":"sketches"}
+        domain_vals = list(domains.values())
+        return domain_vals[:test_env_idx]+domain_vals[test_env_idx+1:]
     
 
 
-# class ImgsDataset2(Dataset):
-#     def __init__(self,model_type,shape, num_imgs=50,concept_set_type=None,test_env=0):
-#         self.model_type = model_type
-#         self.shape = shape
-#         # pairs = get_pairs(model_type,concept_set_type)
-#         # print(pairs)
-#         # concepts = set()
-#         # for p in pairs:
-#         #     concepts.add(p)
-#         #     for l1,l2 in pairs[p]:
-#         #         concepts.add(l1)
-#         #         concepts.add(l2)
-#         # self.concepts = list(concepts)
+class ImgsDataset2(Dataset):
+    def __init__(self,model_type,shape, num_imgs=50,concept_set_type=None,test_env=0):
+        self.model_type = model_type
+        self.shape = shape
+        # pairs = get_pairs(model_type,concept_set_type)
+        # print(pairs)
+        # concepts = set()
+        # for p in pairs:
+        #     concepts.add(p)
+        #     for l1,l2 in pairs[p]:
+        #         concepts.add(l1)
+        #         concepts.add(l2)
+        # self.concepts = list(concepts)
 
-#         self.concepts = get_concepts(model_type, test_env)
-#         self.num_imgs = num_imgs
+        self.concepts = get_concepts(model_type, test_env)
+        self.num_imgs = num_imgs
 
-#     def __len__(self):
-#         return len(self.concepts)
+    def __len__(self):
+        return len(self.concepts)
 
-#     def __getitem__(self, idx):
-#         con = self.concepts[idx]
-#         path = '/media/Data2/avani.gupta/imgs_np_'+str(self.shape[1])+'by'+str(self.shape[2])+'/'
-#         imgs = np.load(path+con+'.npy')
-#         print(imgs.shape)
-#         breakpoint()
-#         return imgs, con
+    def __getitem__(self, idx):
+        con = self.concepts[idx]
+        path = DATA_PATH+'imgs_np_'+str(self.shape[1])+'by'+str(self.shape[2])+'/'
+        # if not os.path.exists(path+con+'.npy'):
+        # dump_imgs(tuple(self.shape[1:]),con,self.num_imgs)
+        
+        imgs = np.load(path+con+'.npy')
+        # if self.model_type =='isic' or self.model_type=='isic_vgg':
+        #     path = DATA_PATH+'imgs_np_450by600/'
+        #     imgs = np.load(path+con+'.npy')
+        # elif self.model_type =='clever_hans7':
+        #     path = DATA_PATH+'imgs_np_224by224/'
+        #     imgs = np.load(path+con+'.npy')
+
+        # elif self.model_type =='clever_hans':
+        #     path = DATA_PATH+'imgs_np_224by224/'
+        #     imgs = np.load(path+con+'.npy')
+
+        # elif self.model_type=='toy' or self.model_type=='toy_conv':
+        #     save_path = DATA_PATH+'imgs_np_'+str(self.shape[0])+'by'+str(self.shape[1])+'_gray/'
+        #     imgs = np.load(save_path+con+'.npy') #load all imgs and save student out for them
+        #     imgs = (imgs[:,:,:,0] + imgs[:,:,:,1] + imgs[:,:,:,2])/3 #convert rgb to gray: https://www.baeldung.com/cs/convert-rgb-to-grayscale
+        #     imgs = np.expand_dims(imgs, axis=3)
+            
+        # elif self.shape == (28,28) or self.model_type =='colormnist' or self.model_type=='decoymnist' or self.model_type=='texturemnist':
+        #     save_path = DATA_PATH+'imgs_np_28by28'+'/'
+        #     if os.path.exists(save_path+con+'.npy'):
+        #         imgs = np.load(save_path+con+'.npy')
+        #     else:
+        #         dump_imgs(self.shape, con)
+        #         imgs = np.load(save_path+con+'.npy')
+        
+        # elif self.model_type=='cat_dog' or self.model_type=='faces' or self.model_type=='pacs':
+        #     imgs = np.load(DATA_PATH+'imgs_np_224by224/'+con+'.npy')
+
+        # if self.model_type=='decoymnist': #have grayscale imgs
+        #     imgs = (imgs[:,:,:,0] + imgs[:,:,:,1] + imgs[:,:,:,2])/3 #convert rgb to gray: https://www.baeldung.com/cs/convert-rgb-to-grayscale
+        #     imgs = np.expand_dims(imgs, axis=3)
+        #     print(imgs.shape)
+        print(imgs.shape)
+        breakpoint()
+        return imgs, con
 
 
 class EncoMapISIC2NN(torch.nn.Module):
@@ -448,9 +624,13 @@ class EncoMapISIC2NN(torch.nn.Module):
     def __init__(self):
         super(EncoMapISIC2NN, self).__init__()
         self.fc1 = nn.Linear(268800,4096)
+        # self.fc2 = nn.Linear(67200, 16800)
+        # self.fc3 = nn.Linear(16800,4096)
        
     def forward(self,x):
         x = self.fc1(x)
+        # x = self.fc2(x)
+        # x = self.fc3(x)
         return x
 
 class DecoMapISIC2NN(torch.nn.Module):
@@ -460,10 +640,14 @@ class DecoMapISIC2NN(torch.nn.Module):
     def __init__(self):
         super(DecoMapISIC2NN, self).__init__()
         self.fc1 = nn.Linear(4096, 268800)
+        # self.fc2 = nn.Linear(67200, 16800)
+        # self.fc3 = nn.Linear(268800,67200)
 
        
     def forward(self,x):
         x = self.fc1(x)
+        # x = self.fc2(x)
+        # x = self.fc3(x)
         return x
 
 class EncoMapToyConvNN(torch.nn.Module):
@@ -935,7 +1119,7 @@ class CAV_NN(object):
         
         # if val_loss > last_loss:
         #     trigger_times += 1
-        # #     # torch.save(model.state_dict(),'/media/Data2/avani.gupta/'+dset+'_model'+bias+str(run)+'2.pt')
+        # #     # torch.save(model.state_dict(),DATA_PATH+''+dset+'_model'+bias+str(run)+'2.pt')
         # #     run += 1
         #     if trigger_times >= patience:
         #         print('Early stopping at epoch ',epoch)
@@ -984,11 +1168,11 @@ def get_or_train_cav_nn(concepts,
   return cav_instance, st_dict
 
 def dump_imgs(shape, con, num_imgs,col_type='rgb'):
-    save_path = '/media/Data2/avani.gupta/imgs_np_'+str(shape[0])+'by'+str(shape[1])+'/'
+    save_path = DATA_PATH+'imgs_np_'+str(shape[0])+'by'+str(shape[1])+'/'
     if not os.path.exists(save_path):
         os.makedirs(save_path)
     imgs_loaded = []
-    path = '/media/Data2/avani.gupta/IID_data/concepts/'+con+'/'
+    path = DATA_PATH+'IID_data/concepts/'+con+'/'
     print("tot imgs", len(os.listdir(path)))
     imgs_con_full = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
     num_imgs = int(num_imgs)
@@ -1005,6 +1189,7 @@ def dump_imgs(shape, con, num_imgs,col_type='rgb'):
     
 def add_rand_to_pairs(pairs, num_random_cons, faces=False):
     new_pairs = {}
+    # new_pairs.update(pairs)
     for p in pairs:
         for pp in pairs[p]:
             con, neg_con = pp
@@ -1032,13 +1217,13 @@ def add_rand_to_pairs(pairs, num_random_cons, faces=False):
     
 import glob
 def dump_random_imgs(num_random_cons, num_imgs):
-    rand_imgs = glob.glob('/media/Data2/avani.gupta/IID_data/concepts/randoms/*.png')
+    rand_imgs = glob.glob(DATA_PATH+'IID_data/concepts/randoms/*.png')
     num_random_cons = 10
     shape = (28,28)
     cur = 0
     for i in range(num_random_cons):
         con = 'randoms_'+str(i)
-        save_path = '/media/Data2/avani.gupta/imgs_np_28by28'+'/'
+        save_path = DATA_PATH+'imgs_np_28by28'+'/'
         imgs_loaded = []
         if (cur+num_imgs)>len(rand_imgs):
             print("tot ran cons",i)
@@ -1074,13 +1259,12 @@ class ImgsDataset(Dataset):
 
     def __getitem__(self, idx):
         con = self.concepts[idx]
-        path = f'/media/Data2/avani.gupta/imgs_np_{self.shape[0]}by{self.shape[0]}/'
-        # if os.path.exists(path+con+'.npy'):
-        #     imgs = np.load(path+con+'.npy')
-        # else:
-        dump_imgs(self.shape, con, self.num_imgs)
-        print("loading from ",path+con+'.npy')
-        imgs = np.load(path+con+'.npy')
+        path = DATA_PATH+f'imgs_np_{self.shape[0]}by{self.shape[0]}/'
+        if os.path.exists(path+con+'.npy'):
+            imgs = np.load(path+con+'.npy')
+        else:
+            dump_imgs(self.shape, con, self.num_imgs)
+            imgs = np.load(path+con+'.npy')
        
         if self.model_type=='decoymnist': #have grayscale imgs
             try:
@@ -1473,7 +1657,7 @@ def get_mapping_module(model_type):
     #     downconv_m = DecoMapPACSNN()
     return upconv_m, downconv_m, dset_type, bottleneck_name
 
-from .networks_classi import *
+# from utils.networks_classi import *
 from os.path import join as oj
 
 def get_model_save_name(opt):
@@ -1567,7 +1751,7 @@ def get_model_and_data(model_type, opt, kwargs):
         shape = (28,28)
         if not opt.train_from_scratch:
             print("loading baseline model")
-            # model.load_state_dict(torch.load('/media/Data2/avani.gupta/best_checkpoints/acc98.98best47decoymnistdmnistpairs_vals5num_imgs150lr0.58regularizer_rate0.3wtcav0.93batch_size256per_proto_mean_wt0.35use_proto0use_cdepcolor1use_precalc_proto1update_proto1train_from_scratch1use_knn_proto0class_wise_training0final_run'))
+            # model.load_state_dict(torch.load(DATA_PATH+'best_checkpoints/acc98.98best47decoymnistdmnistpairs_vals5num_imgs150lr0.58regularizer_rate0.3wtcav0.93batch_size256per_proto_mean_wt0.35use_proto0use_cdepcolor1use_precalc_proto1update_proto1train_from_scratch1use_knn_proto0class_wise_training0final_run'))
             model.load_state_dict(torch.load('mnist/DecoyMNIST/orig_model_decoyMNIST_.pt'))
         bottleneck_name = 'conv2'
 
@@ -1602,7 +1786,7 @@ def get_model_and_data(model_type, opt, kwargs):
         shape = (28,28)
 
         if not opt.train_from_scratch:
-            # model.load_state_dict(torch.load('/media/Data2/avani.gupta/new_checkpoints/acc46.64best_val_acc45.7highest_epoch0iter130colormnistcolormnistp8nimg150lr0.01rr0.3wtcav5bs44pwt0.3upr1cd0precalc1up1scratch0uknn1cwt0s42corr'))
+            # model.load_state_dict(torch.load(DATA_PATH+'new_checkpoints/acc46.64best_val_acc45.7highest_epoch0iter130colormnistcolormnistp8nimg150lr0.01rr0.3wtcav5bs44pwt0.3upr1cd0precalc1up1scratch0uknn1cwt0s42corr'))
             model.load_state_dict(torch.load('mnist/ColorMNIST/orig_model_colorMNIST.pt'))
 
     if model_type =='texturemnist':

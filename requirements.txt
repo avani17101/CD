@@ -203,12 +203,6 @@ soupsieve @ file:///tmp/build/80754af9/soupsieve_1636706018808/work
 stack-data @ file:///opt/conda/conda-bld/stack_data_1646927590127/work
 tabulate==0.9.0
 tenacity==8.0.1
-tensorboard==2.8.0
-tensorboard-data-server==0.6.1
-tensorboard-plugin-wit==1.8.1
-tensorboardX==2.5.1
-tensorflow==2.8.0
-tensorflow-io-gcs-filesystem==0.24.0
 termcolor==1.1.0
 terminado @ file:///tmp/build/80754af9/terminado_1644322581811/work
 testpath @ file:///tmp/build/80754af9/testpath_1624638946665/work

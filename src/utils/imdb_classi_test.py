@@ -1,13 +1,10 @@
 import numpy as np # linear algebra
 import torch
-from torch import nn, optim
 from torchvision import datasets, models, transforms
-from torch import functional as F
 import pandas as pd
 from torch.utils.data import Dataset, DataLoader
 import matplotlib.pyplot as plt
 from glob import glob
-from PIL import Image
 import os
 import glob
 from tqdm import tqdm

@@ -2,22 +2,13 @@
 Learn fc over dino mapped to student space
 '''
 import torch
-import torch.nn as nn
-import numpy as np
-#### cav modulr
 import os.path
 import pickle
-from six.moves import range
-import matplotlib.pyplot as plt
-import torch.nn.functional as F
 import os
-from tqdm import tqdm
 from utils.utils_train import *
 from utils.networks_classi import *
 from argparse import ArgumentParser
 
-# from train_teacher_map import *
-# from Dino.feature_extractor.lib.baselines import DINO, get_model
 """
 Teacher learns fc(tcav) on concept set
 """
@@ -26,9 +17,6 @@ from utils.utils_train import *
 from utils.utils_tcav2 import *
 
 if __name__ == "__main__":
-    #### cav module ends here
-    # model_type = 'colormnist'
-    # dset = 'mnistconv1'
     parser = ArgumentParser()
     parser.add_argument("--num_imgs", default=150, type=int, help="number of imgs total")
     parser.add_argument("--pairs_vals", default=5, type=int, help="pair number")

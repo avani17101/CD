@@ -1,65 +1,25 @@
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
-from re import L
-from selectors import EpollSelector
 import numpy as np
 from utils.utils_tcav2 import CAV
 from utils.utils_tcav2 import *
 import torch
+import torch.nn as nn
 from tqdm import tqdm
 import os
-import torch.nn.functional as F
-import torch.nn as nn
-import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
-import numpy as np
-from statistics import mean
-import json
 from train_student_map import *
 from utils.tcav_options import *
-import math
 from tqdm import tqdm
-from argparse import ArgumentParser
-import torch.utils.data as tutils
-from torch.autograd import Variable
-import math
 import wandb
-import csv
 torch.cuda.empty_cache()
-from os.path import join as oj
-from datetime import datetime
 from utils.utils_train import *
 from utils.networks_classi import *
-import sys
 from sklearn.cluster import KMeans
 import dep.score_funcs as score_funcs
-from torchvision.models import resnet18
-from torchvision.models import resnet50
-from torchvision.datasets import ImageFolder
 
-
-# from DomainGeneralization.Table1.model import MyResnet, MyVGG, MyInceptionResnet, MyAlexnet
-# from DomainGeneralization.Table1.PACSDataset import PACSDataset
-import torchvision.transforms as transforms
-# from train_teacher_map_pacs import DecoMapMNISTNN, EncoMapMNISTNN
-# from da import *
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-"""
-Copyright 2018 Google LLC
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    https://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-"""
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
 
 print("new script")
 opt = TCAVOptions().parse() 
@@ -67,10 +27,6 @@ print("current seed",torch.seed())
 cur_seed = 9612836376807465428
 torch.manual_seed(cur_seed)
 torch.cuda.manual_seed(cur_seed)
-# np.random.seed(cur_seed)
-# random.seed(opt.seed)
-# model_type = 'decoymnist'
-# dset = 'dmnist'
 
 wandb.init(project="change_fixed_new", entity="avani", config=opt,save_code=True)
 
@@ -104,13 +60,7 @@ use_knn_proto= opt.use_knn_proto
 class_wise_training = opt.class_wise_training
 num_imgs = opt.num_imgs
 bias = "1"
-# if opt.use_wandb:
-#     if use_proto:
-#         wandb.init(project=dset+opt.loss_type+"_runs_new_"+opt.bottleneck_name+'proto_mean'+str(opt.do_proto_mean)+"wt"+str(cur_proto_mean_wt)+"pairs"+str(pair_num)+"affect"+str(affect), entity="avani")
-#     else:
-#         wandb.init(project=dset+opt.loss_type+"_runs_new_"+opt.bottleneck_name+'direct'+"pairs"+str(pair_num)+"affect"+str(affect), entity="avani")
 
-#     wandb.init(config=opt)
 DATA_PATH = '/media/Data2/avani.gupta/'
 print(opt.gpu_ids)
 use_cuda = torch.cuda.is_available()
@@ -118,306 +68,9 @@ use_cuda = torch.cuda.is_available()
 # from imdb_classi import *
 # from imdb_classi_test import *
 kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
-if model_type == 'resnet50':
-    model = resnet50(pretrained=True)
-    model_type = 'resnet50'
-    model = model.cuda()
-    val_transforms = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Resize((224,224)),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    ])
-    bs = 16
-    imagenet_zip_path = DATA_PATH+'Imagenet2012/Imagenet-sample/'
-    train_dataset = ImageFolder(root=imagenet_zip_path+'train/', transform=val_transforms)
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=2)
-
-    val_dataset = ImageFolder(root=imagenet_zip_path+'val/', transform=val_transforms)
-    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=4, shuffle=True, num_workers=2)
-
-    test_loader = None
-    named_layers = dict(model.named_modules())
-    lis = list(named_layers.keys())
-    bottleneck_name = "layer4.2.conv3"
-    sub_classes = os.listdir(DATA_PATH+'Imagenet2012/Imagenet-sample/train/')
-
-if model_type == 'faces':
-    model = resnet18(pretrained=False)
-    model.fc = nn.Linear(512,2)
-    if not opt.train_from_scratch:
-        model.load_state_dict(torch.load("/media/Data2/avani.gupta/bffhq/bffhq/bffhq_0.5_vanilla/result/best_model.th")['state_dict'])
-    model.cuda()
-    bs = 64
-    train_loader = DataLoader(bFFHQDataset("train"),bs, shuffle=True, num_workers=0)
-    val_loader = DataLoader(bFFHQDataset("valid"),bs, shuffle=True, num_workers=0)
-    test_loader = DataLoader(bFFHQDataset("test"),bs, shuffle=True, num_workers=0)
-    named_layers = dict(model.named_modules())
-    lis = list(named_layers.keys())
-    bottleneck_name = 'layer4.1.conv1'
-
-if model_type =='cat_dog':
-    model = models.resnet18(pretrained=True)
-    in_feats = model.fc.in_features
-    model.fc = nn.Linear(in_feats, 1)
-    bias = 'TB'+str(bias)
-    model.load_state_dict(torch.load('/home/avani.gupta/tcav_pt/cat_dog_model'+bias+'.pt'))
-    model = model.cuda()
-    model.eval()
-
-    bs = 64
-    if bias=='TB2':
-        dset = 'cat_dog'+bias
-    dset ='cat_dog' #+bias
-    
-    # dset = 'imdb'
-    # bias = 'EB2' #[TB1, TB2 for cat_dot], EB1, EB2 for imdb
-    data_transform = transforms.Compose([transforms.RandomResizedCrop(224),
-            transforms.RandomHorizontalFlip(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                std=[0.229, 0.224, 0.225])
-        ])
-    print("catt")
-    train_ds = CatBiasedDataSet(data_transform,bias,mode='train')
-    train_loader = DataLoader(train_ds, bs, shuffle=True, num_workers=3)
-    val_ds = CatBiasedDataSet(data_transform,bias,mode='val')
-    val_loader = DataLoader(val_ds, bs, shuffle=True, num_workers=3)
-
-    if bias == "1":
-        opp = "2"
-    else:
-        opp = "1"
-    if dset =='cat_dog':
-        bias = "TB"+bias
-        opp_bias = "TB"+opp
-    else:
-        bias = "EB"+bias
-        opp_bias = "EB"+opp
-    print("opp_bias",opp_bias)
-    ds = CatBiasedDataSet(data_transform,opp_bias,mode='test')  #use entire set of opposite set
-    test_loader = DataLoader(ds, bs)
-
-    named_layers = dict(model.named_modules())
-    lis = list(named_layers.keys())
-    bottleneck_name = 'layer4.1.conv1'
-
-if model_type == 'clever_hans':
-    import NeSyXIL.src.clevr_hans.cnn.data_xil as data
-    # import NeSyXIL.src.clevr_hans.cnn.utils as utils
-    import NeSyXIL.src.clevr_hans.cnn.model as model_
-    data_dir = "/media/Data2/avani.gupta/CLEVR-Hans3/"
-
-    
-    if opt.dataset == "clevr-hans-state":
-        dataset_train = data.CLEVR_HANS_EXPL(data_dir, "train", lexi=True, conf_vers='CLEVR-Hans3')
-        dataset_val = data.CLEVR_HANS_EXPL(data_dir, "val", lexi=True, conf_vers='CLEVR-Hans3')
-        dataset_test = data.CLEVR_HANS_EXPL(data_dir, "test", lexi=True, conf_vers='CLEVR-Hans3')
-    else:
-        print("Wrong dataset specifier")
-        exit()
-
-    opt.n_imgclasses = dataset_train.n_classes
-    opt.classes = np.arange(opt.n_imgclasses)
-    opt.category_ids = dataset_train.category_ids
-
-    train_loader = data.get_loader(
-        dataset_train,
-        batch_size=batch_size,
-        num_workers=opt.num_workers,
-        shuffle=True,
-    )
-    train_proto_loader = data.get_loader(
-        dataset_train,
-        batch_size=512,
-        num_workers=opt.num_workers,
-        shuffle=True,
-    )
-
-
-    # test_loader = data.get_loader(
-    #     dataset_test,
-    #     batch_size=batch_size,
-    #     num_workers=opt.num_workers,
-    #     shuffle=False,
-    # )
-    # val_loader = data.get_loader(
-    #     dataset_val,
-    #     batch_size=batch_size,
-    #     num_workers=opt.num_workers,
-    #     shuffle=False,
-    # )
-    model = model_.ResNet34Small(num_classes=opt.n_imgclasses)
-    if not train_from_scratch:
-        st_dict = torch.load('/home/avani.gupta/tcav_pt/NeSyXIL/src/clevr_hans/cnn/runs/conf_3/resnet-clevr-hans-17-conf_3_seed0/model_epoch56_bestvalloss_0.0132.pth')['weights']
-        model.load_state_dict(st_dict)
-    model.cuda().eval()
-    bottleneck_name = 'features.6.5.conv1'
-
-if model_type == 'clever_hans7':
-    import NeSyXIL.src.clevr_hans.cnn.data_xil as data
-    # import NeSyXIL.src.clevr_hans.cnn.utils as utils
-    import NeSyXIL.src.clevr_hans.cnn.model as model_
-    data_dir = "/media/Data2/avani.gupta/CLEVR-Hans7/"
-    
-    if opt.dataset == "clevr-hans-state":
-        dataset_train = data.CLEVR_HANS_EXPL(data_dir, "train", lexi=True, conf_vers='CLEVR-Hans7')
-        dataset_val = data.CLEVR_HANS_EXPL(data_dir, "val", lexi=True, conf_vers='CLEVR-Hans7')
-        dataset_test = data.CLEVR_HANS_EXPL(data_dir, "test", lexi=True, conf_vers='CLEVR-Hans7')
-    else:
-        print("Wrong dataset specifier")
-        exit()
-
-    opt.n_imgclasses = 7
-    opt.classes = np.arange(opt.n_imgclasses)
-    opt.category_ids = dataset_train.category_ids
-
-    train_loader = data.get_loader(
-        dataset_train,
-        batch_size=batch_size,
-        num_workers=opt.num_workers,
-        shuffle=True,
-    )
-    train_proto_loader = data.get_loader(
-        dataset_train,
-        batch_size=1024,
-        num_workers=opt.num_workers,
-        shuffle=True,
-    )
-    # test_loader = data.get_loader(
-    #     dataset_test,
-    #     batch_size=batch_size,
-    #     num_workers=opt.num_workers,
-    #     shuffle=False,
-    # )
-    # val_loader = data.get_loader(
-    #     dataset_val,
-    #     batch_size=batch_size,
-    #     num_workers=opt.num_workers,
-    #     shuffle=False,
-    # )
-    model = model_.ResNet34Small(num_classes=opt.n_imgclasses)
-    if not train_from_scratch:
-        st_dict = torch.load('/home/avani.gupta/tcav_pt/runs/CLEVR-Hans7/2023-01-09_19:05:35-CLEVR-Hans7_seed10/model_epoch8_bestvalloss_0.2134.pth')['weights']
-        model.load_state_dict(st_dict)
-    model.cuda().eval()
-    bottleneck_name = 'features.6.5.conv1'
-
-
-if model_type == 'toy':
-    biased_data, unbiased_data, labels = get_data()
-    # labels = torch.from_numpy(labels).long().reshape(-1,1)
-    unbiased_data = torch.from_numpy(np.float32(unbiased_data))
-    labels = torch.from_numpy(labels).long()
-    biased_data = torch.from_numpy(np.float32(biased_data))
-    train_data = tutils.TensorDataset(biased_data,labels) 
-    train_loader = tutils.DataLoader(train_data,batch_size=num_imgs,shuffle=True) 
-    test_data = tutils.TensorDataset(unbiased_data,labels) 
-    test_loader = tutils.DataLoader(test_data,batch_size=num_imgs)
-    shape = (200,200)
-    y_full = labels
-    X_full = biased_data 
-    model = Net()
-    if not train_from_scratch:
-        model.load_state_dict(torch.load(DATA_PATH+'net.pt'))
-    bottleneck_name = 'fc2'
-    model.cuda()
-
-if model_type == 'decoymnist':
-    dpath = 'dep/data/DecoyMNIST/'
-    X_full = torch.Tensor(np.load(oj(dpath, "train_x_decoy.npy")))
-    y_full = torch.Tensor(np.load(oj(dpath, "train_y.npy"))).type(torch.int64)
-    complete_dataset = tutils.TensorDataset(X_full, y_full) # create your datset
-
-    num_train = int(len(complete_dataset)*.9)
-    num_test = len(complete_dataset)  - num_train 
-    torch.manual_seed(0)
-    train_dataset, val_dataset,= torch.utils.data.random_split(complete_dataset, [num_train, num_test])
-    train_loader = tutils.DataLoader(train_dataset, batch_size=num_imgs, shuffle=True, **kwargs) # create your dataloader
-    val_loader = tutils.DataLoader(val_dataset, batch_size=num_imgs, shuffle=True, **kwargs) # create your dataloader
-
-    test_x_tensor = torch.Tensor(np.load(oj(dpath, "test_x_decoy.npy")))
-    test_y_tensor = torch.Tensor(np.load(oj(dpath, "test_y.npy"))).type(torch.int64)
-    test_dataset = tutils.TensorDataset(test_x_tensor,test_y_tensor) # create your datset
-    test_loader = tutils.DataLoader(test_dataset, batch_size=num_imgs, shuffle=True, **kwargs) # create your dataloader
-    
-    model = MNISTDecoyNet()
-    model.cuda()
-    shape = (28,28)
-    if not train_from_scratch:
-        model.load_state_dict(torch.load('mnist/DecoyMNIST/orig_model_decoyMNIST_.pt'))
-    bottleneck_name = 'conv2'
-
-if model_type =='colormnist':
-    x_numpy_train = np.load(os.path.join("dep/data/ColorMNIST", "train_x.npy"))
-    prob = (x_numpy_train.sum(axis = 1) > 0.0).mean(axis = 0).reshape(-1)
-    prob /=prob.sum()
-    mean = x_numpy_train.mean(axis = (0,2,3))
-    std = x_numpy_train.std(axis = (0,2,3))
-    bottleneck_name = opt.bottleneck_name
-    if bottleneck_name=='conv1':
-        dset = dset + 'conv1'
-
-    def load_dataset(name, path='dep/'):
-        x_numpy = np.load(os.path.join(path+"data/ColorMNIST", name + "_x.npy"))
-        x_numpy -= mean[None, :, None, None,]
-        x_numpy /= std[None, :, None, None,]
-        y_numpy = np.load(os.path.join(path+"data/ColorMNIST", name +"_y.npy"))
-        x_tensor = torch.Tensor(x_numpy)
-        y_tensor = torch.Tensor(y_numpy).type(torch.int64)
-        dataset = tutils.TensorDataset(x_tensor,y_tensor) 
-        return dataset, x_tensor, y_tensor
-
-    train_dataset,X_full,y_full = load_dataset("train")
-    val_dataset,val_x, val_y  = load_dataset("val")
-    test_dataset,_,_ = load_dataset("test")
-    train_loader = tutils.DataLoader(train_dataset,batch_size=batch_size,shuffle=True)
-    val_loader = tutils.DataLoader(val_dataset,batch_size=batch_size)
-    test_loader = tutils.DataLoader(test_dataset,batch_size=batch_size)
-    model = MNISTColorNet()
-    model.cuda()
-    shape = (28,28)
-
-    if not train_from_scratch:
-        # if opt.load_best_finetuned:
-        # model.load_state_dict(torch.load('4colormnistconv2loss_cos_msescratch_trainregsvmwcav0.5triplet_1cav_1new_0.5protolag_affectTruepairs3_knn_k3_cdep'))
-        # else:
-        model.load_state_dict(torch.load('mnist/ColorMNIST/orig_model_colorMNIST.pt'))
-
-if model_type =='texturemnist':
-    x_numpy_train = np.load(os.path.join("/media/Data2/avani.gupta/data/ColorMNIST", "train_texture_x.npy"))
-    prob = (x_numpy_train.sum(axis = 1) > 0.0).mean(axis = 0).reshape(-1)
-    prob /=prob.sum()
-    mean = x_numpy_train.mean(axis = (0,2,3))
-    std = x_numpy_train.std(axis = (0,2,3))
-    bottleneck_name = 'conv2'
-    if bottleneck_name=='conv1':
-        dset = dset + 'conv1'
-
-    def load_dataset(name, path='dep/'):
-        x_numpy = np.load(os.path.join(path+"data/ColorMNIST", name + "_x.npy"))
-        x_numpy -= mean[None, :, None, None,]
-        x_numpy /= std[None, :, None, None,]
-        y_numpy = np.load(os.path.join(path+"data/ColorMNIST", name +"_y.npy"))
-        x_tensor = torch.Tensor(x_numpy)
-        y_tensor = torch.Tensor(y_numpy).type(torch.int64)
-        dataset = tutils.TensorDataset(x_tensor,y_tensor) 
-        return dataset, x_tensor, y_tensor
-
-    train_dataset,X_full,y_full = load_dataset("train_texture")
-    val_dataset,val_x, val_y  = load_dataset("val_texture")
-    test_dataset,_,_ = load_dataset("test_texture")
-    train_loader = tutils.DataLoader(train_dataset,batch_size=batch_size,shuffle=True)
-    val_loader = tutils.DataLoader(val_dataset,batch_size=batch_size)
-    test_loader = tutils.DataLoader(test_dataset,batch_size=batch_size)
-    model = MNISTColorNet()
-    model.cuda()
-    shape = (28,28)
-    
-
-    if not train_from_scratch:
-        # if opt.load_best_finetuned:
-        #     model.load_state_dict(torch.load('4colormnistconv2loss_cos_msescratch_trainregsvmwcav0.5triplet_1cav_1new_0.5protolag_affectTruepairs3_knn_k3_cdep'))
-        # else:
-        model.load_state_dict(torch.load('/home/avani.gupta/tcav_pt/methodvanilla_tex.pt'))
+model, bottleneck_name, train_loader, val_loader, test_loader, X_full, y_full, val_x, val_y, shape = get_model_and_data(model_type, opt, kwargs)
+model = model.cuda()
+named_layers = dict(model.named_modules())
 
 s = ""
 if train_from_scratch:
@@ -519,7 +172,7 @@ cos = nn.CosineSimilarity(dim=0,eps=1e-6)
 mse = nn.MSELoss()
 criterion = nn.CrossEntropyLoss()
 # criterion2 = nn.CrossEntropyLoss(reduction='none')
-# criterion_ = nn.CrossEntropyLoss()
+criterion_ = nn.CrossEntropyLoss()
 criterion_bce = nn.BCEWithLogitsLoss()
 triplet_loss = nn.TripletMarginWithDistanceLoss(distance_function=nn.CosineSimilarity(dim=0,eps=1e-6))
 if model_type =='clever_hans':
@@ -552,57 +205,12 @@ for p in k:
 model_save_name += "s"+str(opt.seed)
 print("round saving models ",model_save_name)
 
-# k = ["pairs_vals","num_imgs","lr","regularizer_rate","wtcav","batch_size","cur_proto_mean_wt","use_proto","use_cdepcolor","use_precalc_proto","update_proto","train_from_scratch","use_knn_proto","class_wise_training"]
-# for p in k:
-#     model_save_name += str(p)+str(round(wandb.config[p],2))
-print("round saving models ",model_save_name)
-
-# if opt.do_proto_mean:
-#     model_save_name = exp_name+s+"reg"+opt.reg_type+"wcav"+str(wtcav)+"triplet_"+str(opt.use_triplet_loss)+"cav_"+str(opt.use_cav_loss)
-# else:
-#     model_save_name = exp_name+s+"reg"+opt.reg_type+"wcav"+str(wtcav)+"triplet_"+str(opt.use_triplet_loss)+"cav_"+str(opt.use_cav_loss)
-# if opt.smoothness_finetune:
-#     model_save_name += "smoothness_wt"+str(opt.swtcav)
-# model_save_name  += "affect"+affect
-# model_save_name += "pairs"+pairs_vals
-# if use_proto:
-#     model_save_name += "proto"
-#     if use_knn_proto:
-#         model_save_name += "_knn_k"+str(knn_k)
-# else:
-#     model_save_name += "direct"
-# if update_proto:
-#     model_save_name += 'update_proto'
-# else:
-#     model_save_name += 'static_proto'
-# if opt.do_proto_mean:
-#     model_save_name += 'delta_proto'
-# model_save_name += 'new_mapping'  
-# if opt.load_best_finetuned:
-#     model_save_name += 'best_finetuned_load'
-# if not class_wise_training:
-#      model_save_name += 'no_classwise'
-# model_save_name += 'cor_nll_loss'
-# if use_cdepcolor:
-#     model_save_name += 'cdep'
-#     model_save_name += 'reg_rate'+str(regularizer_rate)
-# model_save_name += "num_imgs"+str(num_imgs)
-
-# import time
-#     timestr = time.strftime("%Y%m%d-%H%M%S")
-# model_save_name += "time"+str(timestr)
-    
 res = {}
 import torch.optim as optim
 optimizer = optim.Adam(model.parameters(), lr=opt.lr)
-# scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
-#     factor=0.1, patience=10, threshold=0.0001, threshold_mode='abs')
 
 if model_type in ['toy','colormnist','decoymnist',"texturemnist"]:
     class_labels = y_full.unique().numpy()
-    # for c in class_labels:
-    #     idx, = torch.where(y_full==c)
-    #     lb_wise_X[c] = X_full[idx] 
 
 cos = nn.CosineSimilarity(dim=0,eps=1e-6)
 
@@ -615,20 +223,10 @@ for epoch in tqdm(range(epochs)):
     cav_loss_lis = []
     if use_proto:
         if epoch==0 and use_precalc_proto:
-            # if use_knn_proto:
             proto_dic = np.load(DATA_PATH+'proto_'+model_type+"knn"+str(knn_k)+'.npy',allow_pickle=True)[()] #load proto dicts
-            # else:
-            #     proto_dic = np.load(DATA_PATH+'proto_mean'+model_type+'.npy',allow_pickle=True)[()] #load proto dicts
 
         elif epoch%2==0 and update_proto:
             bss = 1000
-            if 'clever_hans' in model_type:
-                data= next(iter(train_proto_loader))
-                X_full, _, y_full, _, _, _ = data
-                del data
-                bss = 50
-
-            # if model_type in ['toy','colormnist','decoymnist']:
             for c in class_labels:
                 acts = []
                 def save_activation_hook(mod, inp, out):
@@ -648,7 +246,6 @@ for epoch in tqdm(range(epochs)):
                     ss = acts.shape
 
                     #giving half weightage to old proto mean and half to new proto
-                    # if use_knn_proto:
                     acts = acts.detach().cpu().numpy().reshape((-1,ss[1]*ss[2]*ss[3]))
                     kmeans = KMeans(n_clusters=knn_k, random_state=0).fit(acts)
                     centers = kmeans.cluster_centers_
@@ -662,12 +259,6 @@ for epoch in tqdm(range(epochs)):
                         else:
                             proto_dic[c]['cluster_'+str(f)] = (1-cur_proto_mean_wt)*proto_dic[c]['cluster_'+str(f)]+cur_proto_mean_wt*centers[f].reshape((ss[1],ss[2],ss[3]))
 
-                    # else:
-                    #     if epoch==0 or not opt.do_proto_mean:
-                    #         proto_dic[c] = np.expand_dims(np.mean(acts,axis=0))
-                    #     else:
-                    #         proto_dic[c] = (1-cur_proto_mean_wt)*proto_dic[c]+ cur_proto_mean_wt*np.expand_dims(np.mean(acts,axis=0)) #proto-type is avg of all of that class activatinos
-                        
 
     #proto acts as psuedo GT
     #train only over last k layers
@@ -700,11 +291,8 @@ for epoch in tqdm(range(epochs)):
         if model_type == 'colormnist' or model_type =='decoymnist' or model_type=='texturemnist':
             gt_loss = torch.nn.functional.nll_loss(out, gt.to(device))
         elif model_type =='faces':
-            # label = gt[:, 0]
             gt_loss = criterion(out, gt.to(device))
         elif model_type == 'cat_dog':
-            # breakpoint()
-            # gt = gt.view(len(gt), 1)
             gt_loss= criterion_bce(out, gt.view(len(gt), 1).to(device))
         else:
             gt_loss = criterion(out,gt.to(device))
@@ -729,16 +317,12 @@ for epoch in tqdm(range(epochs)):
                     for i in range(num_blobs): 
                         add_loss +=score_funcs.gradient_sum(imgs, gt.to(device), torch.FloatTensor(blobs[blob_idxs[i]]).to(device),  model, torch.nn.functional.nll_loss)
                     (regularizer_rate*add_loss).backward(retain_graph=True)
-                    # loss = torch.nn.functional.nll_loss(out, gt.to(device))
-                    # loss.backward(retain_graph=True)
                 elif cdep_grad_method ==2:
                     for j in range(len(imgs)):
                         for i in range(num_blobs): 
                             add_loss +=(score_funcs.eg_scores_2d(model, imgs, j, gt.to(device), 50) * torch.FloatTensor(blobs[blob_idxs[i]]).to(device)).sum()
 
                     (regularizer_rate*add_loss).backward(retain_graph=True)
-                # loss = torch.nn.functional.nll_loss(out, gt.to(device))
-                # loss.backward(retain_graph=True)
             elif model_type =='decoymnist':
                 regularizer_rate = regularizer_rate
                 import dep.cdep as cdep
@@ -757,30 +341,19 @@ for epoch in tqdm(range(epochs)):
                     if cdep_grad_method ==0:
                         rel, irrel = cdep.cd(blob, imgs,model)
                         add_loss += torch.nn.functional.softmax(torch.stack((rel.view(-1),irrel.view(-1)), dim =1), dim = 1)[:,0].mean()
-
-                        #print(torch.cuda.max_memory_allocated(0)/np.power(10,9))
                         (regularizer_rate*add_loss +gt_loss).backward(retain_graph=True)
                     elif cdep_grad_method ==1:
                         add_loss +=score_funcs.gradient_sum(imgs, gt.to(device), torch.FloatTensor(blob).to(device),  model, torch.nn.functional.nll_loss)
                         (regularizer_rate*add_loss).backward(retain_graph=True)
-
-                        #print(torch.cuda.max_memory_allocated(0)/np.power(10,9))
-                        # optimizer.step()
 
                     elif cdep_grad_method ==2:
                         for j in range(len(imgs)):
                             add_loss +=(score_funcs.eg_scores_2d(model, imgs, j, gt.to(device), num_samples) * torch.FloatTensor(blob).to(device)).sum()
                         (regularizer_rate*add_loss).backward(retain_graph=True)
 
-                        #print(torch.cuda.max_memory_allocated(0)/np.power(10,9))
-                        # optimizer.step()
-                        # loss = torch.nn.functional.nll_loss(out, target)
-                        # loss.backward()
-
 
         if opt.use_gt_loss:
             gt_loss.backward(retain_graph=True)
-            # optimizer.step()
         
         faces_class_wise = {0:"young_women",1:"old_men"}
 
@@ -869,8 +442,6 @@ for epoch in tqdm(range(epochs)):
                                                 loss = mse_loss(act, torch.from_numpy(proto_dic[c]['cluster_'+str(f)]).cuda().unsqueeze(0))
                                             else:
                                                 loss += mse_loss(act, torch.from_numpy(proto_dic[c]['cluster_'+str(f)]).cuda().unsqueeze(0))
-                                        # else:  
-                                        #     loss = mse_loss(act, torch.from_numpy(proto_dic[c]).cuda()) #loss btw act and proto
                                     
                                         grad_ = torch.autograd.grad(loss, act, retain_graph=True,create_graph=True)
                                     else:
@@ -902,10 +473,7 @@ for epoch in tqdm(range(epochs)):
                                         loss_ = -wtcav*torch.sum(cos_lis) 
                                 
                                 if affect==True:
-                                    # if loss_type =='cos_mse':  
                                     loss_= mse_loss(cos_lis, torch.ones(len(cos_lis)).to(device))
-                                        # loss_ = torch.sum(torch.abs(cos_lis)) #L1  direct hence cos 0 = 1 | affect | vectors aligned
-
 
                                 if loss_type =='L1_cos':
                                     if affect==False:
@@ -923,7 +491,6 @@ for epoch in tqdm(range(epochs)):
                                     dot_lis_normalised = (dot_lis)/torch.max(dot_lis)
                                     if affect!=None:
                                         if affect==False:
-                                            # print("hereeee",max(dot_lis), mean(dot_lis), min(dot_lis))
                                             dot_lis = torch.reshape(dot_lis, (-1,))
                                             target = torch.ones(len(dot_lis)).to(device)
                                             tcav_loss = None
@@ -935,7 +502,6 @@ for epoch in tqdm(range(epochs)):
                                                 tcav_loss = criterion_(dot_lis.unsqueeze(0).to(device), target.unsqueeze(0).to(device))
                                             else:
                                                 tcav_loss = criterion_(dot_lis.unsqueeze(0).to(device), target.unsqueeze(0).to(device))
-                                            # print(concept,tcav_loss)
                                             loss_ = wtcav*tcav_loss
                                 loss_ = wtcav*loss_
                                 cav_loss_lis.append(loss_.item())
@@ -951,7 +517,6 @@ for epoch in tqdm(range(epochs)):
             for pn,pairs_all in enumerate(pairs_lis):
                 for main_con in pairs_all:
                     pairs = pairs_all[main_con]
-                    # print(pairs, affect_lis[pn])
                     for qs,pair in enumerate(pairs):
                         import glob
                         affect = affect
@@ -964,7 +529,6 @@ for epoch in tqdm(range(epochs)):
                         if opt.teach_mapped_to_stu:
                            
                             fc_save_path = DATA_PATH+'fc_new/dino_mapped_to_stu_space_num_imgs'+str(num_imgs)+dset+"M_ep"+str(opt.mapping_mod_epoch)+'/'
-                            # fc_save_path = DATA_PATH+'fc_new/dino_mapped_to_stu_space_'+dset+'/'
                         
                         files =  glob.glob(fc_save_path+'_cons_'.join(pair)+'*.pt')
 
@@ -1016,14 +580,10 @@ for epoch in tqdm(range(epochs)):
                                         loss = mse_loss(act, torch.from_numpy(proto_dic[gt[b].item()]['cluster_'+str(f)]).cuda().unsqueeze(0))
                                     else:
                                         loss += mse_loss(act, torch.from_numpy(proto_dic[gt[b].item()]['cluster_'+str(f)]).cuda().unsqueeze(0))
-                                # else:  
-                                    # loss = mse_loss(act, torch.from_numpy(proto_dic[gt[b].item()]).cuda()) #loss btw act and proto
                                 grad_ = torch.autograd.grad(loss, act, retain_graph=True,create_graph=True)
                                 
                             else:
                                 grad_ = torch.autograd.grad(out[0][gt[b]], act, retain_graph=True,create_graph=True)
-                            # loss = criterion(out,gt[b].unsqueeze(0).to(device))
-                            # if loss_type=='mse':
                             dot = torch.dot(grad_[0].to(device).float().squeeze(0).flatten(),direc_mean.to(device).float())/torch.linalg.norm(direc_mean)
                             dot_lis.append(dot)
                             
@@ -1050,10 +610,7 @@ for epoch in tqdm(range(epochs)):
                                 loss_ = -wtcav*torch.sum(cos_lis) 
                         
                         if affect==True:
-                            # if loss_type =='cos_mse':  
                             loss_= mse_loss(cos_lis, torch.ones(len(cos_lis)).to(device))
-                                # loss_ = torch.sum(torch.abs(cos_lis)) #L1  direct hence cos 0 = 1 | affect | vectors aligned
-
 
                         if loss_type =='L1_cos':
                             if affect==False:
@@ -1071,7 +628,6 @@ for epoch in tqdm(range(epochs)):
                             dot_lis_normalised = (dot_lis)/torch.max(dot_lis)
                             if affect!=None:
                                 if affect==False:
-                                    # print("hereeee",max(dot_lis), mean(dot_lis), min(dot_lis))
                                     dot_lis = torch.reshape(dot_lis, (-1,))
                                     target = torch.ones(len(dot_lis)).to(device)
                                     tcav_loss = None
@@ -1083,7 +639,6 @@ for epoch in tqdm(range(epochs)):
                                         tcav_loss = criterion_(dot_lis.unsqueeze(0).to(device), target.unsqueeze(0).to(device))
                                     else:
                                         tcav_loss = criterion_(dot_lis.unsqueeze(0).to(device), target.unsqueeze(0).to(device))
-                                    # print(concept,tcav_loss)
                                     loss_ = wtcav*tcav_loss
                         loss_ = wtcav*loss_
                         cav_loss_lis.append(loss_.item())
@@ -1128,16 +683,10 @@ for epoch in tqdm(range(epochs)):
                 if model_type=='faces': #reduce one hot encoding to binry (for faces its just binary classi so take first col as labels)
                     target = target[:,0]
                 output = model(data)
-                # if model_type =='cat_dog': #has logits
-                #     val_loss += criterion_bce(output, target.view(len(target), 1).to(device)).item()
-                # else: #other dsets have softmax
-                #     test_loss += torch.nn.functional.nll_loss(output, target, reduction='sum').item() # sum up batch loss
                 pred = output.argmax(dim=1, keepdim=True) # get the index of the max log-probability
                 correct += pred.eq(target.view_as(pred)).sum().item()
 
-        # test_loss /= len(test_loader.dataset)
         test_acc = 100. * correct / len(test_loader.dataset)
-        # if opt.use_wandb:
         if val_acc > best_val_acc:
             wandb.run.summary[f"best_val_acc_"] = val_acc
             wandb.run.summary[f"best_val_corr_test_acc"] = test_acc
@@ -1149,17 +698,7 @@ for epoch in tqdm(range(epochs)):
             corr_test_acc = test_acc
         model.train()
 
-
-        # if opt.use_wandb:
         wandb.log({"gt_loss": gt_loss, "cav_loss":sum(cav_loss_lis) ,"val_gt_loss":val_loss, "val_acc":val_acc, "test_gt_loss":test_loss,"test_acc":test_acc,"best_val_acc":best_val_acc, "corr_test_acc":corr_test_acc})#,"small_num_op_loss":small_num_op_loss_mean})
-
-        # wandb.log({"gt_loss": gt_loss, "cav_loss":sum(cav_loss_lis) ,"val_gt_loss":val_loss, "val_acc":val_acc, "test_gt_loss":test_loss,"test_acc":test_acc,"best_val_acc":best_val_acc, "corr_test_acc":corr_test_acc})#,"small_num_op_loss":small_num_op_loss_mean})
-        # wandb.log({"gt_loss": gt_loss, "cav_loss":sum(cav_loss_lis)})#,"small_num_op_loss":small_num_op_loss_mean})
         cav_loss_lis = []
-        # torch.save(model.state_dict(), os.path.join(opt.checkpoints_dir+'sweeps',"acc"+str(test_acc)+"best"+str(epoch)+model_save_name+"final_run"))
-
-    # torch.save(model.state_dict(), os.path.join(opt.checkpoints_dir,str(epoch)+model_save_name+"final_run"))
 
 print("we are done!!!!!")
-# torch.save(model.state_dict(), str(epoch)+model_save_name)
-# print("res on arap",get_mse_arap(model,load_model=False))
