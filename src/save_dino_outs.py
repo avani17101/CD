@@ -1,16 +1,13 @@
-# %%
 import torch
 import os
 import argparse
 import tqdm
 import glob
 import numpy as np
-import pickle
 import torchvision.transforms as tfs
-from torchvision.datasets import DatasetFolder, ImageFolder, VisionDataset
+from torchvision.datasets import  VisionDataset
 from torchvision.datasets.folder import default_loader, IMG_EXTENSIONS, has_file_allowed_extension
 import matplotlib.pyplot as plt
-from torch import pca_lowrank
 from utils.utils_train import *
 from utils.utils_tcav2 import *
 

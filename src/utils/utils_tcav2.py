@@ -15,7 +15,6 @@ from sklearn import linear_model, svm
 from sklearn import metrics
 from sklearn.model_selection import train_test_split
 from .tcav_utils import *
-# import tensorflow as tf
 import yaml
 import numpy as np
 import PIL
@@ -24,12 +23,9 @@ import cv2
 import torch
 import os
 import torch.nn.functional as F
-import torch.nn as nn
-import os
 from os import listdir
 from os.path import isfile, join
 import cv2
-from io import StringIO 
 PIL.LOAD_TRUNCATED_IMAGES = True
 
 # Metrics/Indexes

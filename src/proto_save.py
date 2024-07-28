@@ -1,67 +1,26 @@
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
-from re import L
 import numpy as np
 import sys
 sys.path.append("../")
-from utils.utils_tcav2 import CAV
-from utils.utils_tcav2 import *
 import torch
 from tqdm import tqdm
 import os
-import torch.nn.functional as F
-import torch.nn as nn
-import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
 import numpy as np
-from statistics import mean
-import json
-# from train_student_map import *
-# from train_student_map import *
-from utils.tcav_options import *
-import math
-from tqdm import tqdm
-from argparse import ArgumentParser
-import torch.utils.data as tutils
-from torch.autograd import Variable
-import math
-import wandb
-import csv
 from tqdm import tqdm
 torch.cuda.empty_cache()
-from os.path import join as oj
+from sklearn.cluster import KMeans
 
-from datetime import datetime
 from utils.utils_train import *
 from utils.networks_classi import *
+from utils.imdb_classi_test import *
+from utils.utils_tcav2 import *
+from utils.tcav_options import *
 
-from sklearn.cluster import KMeans
-import torchvision.transforms as transforms
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-"""
-Copyright 2018 Google LLC
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    https://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-"""
-
-from utils.networks_classi import *
-from utils.imdb_classi_test import *
-import torchvision.transforms as transforms
-from torchvision.datasets import ImageFolder
-from torchvision.models import resnet50
-
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
 
 opt = TCAVOptions().parse() 
 model_type = opt.model_type
@@ -103,7 +62,6 @@ kwargs = {'num_workers': 1, 'pin_memory': True}
 model, bottleneck_name, train_loader, val_loader, test_loader, X_full, y_full, val_x, val_y, shape = get_model_and_data(model_type, opt, kwargs)
 named_layers = dict(model.named_modules())
 lis = list(named_layers.keys())
-# print(lis)
 
 proto_dic = {}
 bss = 100
@@ -111,17 +69,9 @@ if opt.model_type =='clever_hans':
     class_labels = [0,1] #for lb 0 gray concept should not affect, for lb 1 metal should not
 elif opt.model_type =='clever_hans7':
     class_labels = [0,1,2]
-# elif opt.model_type ==''
 if model_type in ['toy','colormnist','decoymnist','texturemnist','cifar10']:
     class_labels = y_full.unique().numpy()
 
-if 'clever_hans' in model_type or model_type == 'resnet50':
-    data= next(iter(train_proto_loader))
-    X_full, _, y_full, _, _, _ = data
-    del data
-    bss = 50
-
-print("Good till class labels")
 
 for c in tqdm(class_labels):
     acts = []
@@ -155,8 +105,6 @@ for c in tqdm(class_labels):
     else:
         proto_dic[c] = torch.mean(acts,axis=0).unsqueeze(0).detach().cpu().numpy()
 
-if model_type=='clever_hans':
-    model_type += 'dset_small'
 if opt.use_knn_proto:
     np.save('/media/Data2/avani.gupta/proto_'+model_type+"knn"+str(opt.knn_k)+'.npy',proto_dic)
     print('saved to /media/Data2/avani.gupta/proto_'+model_type+"knn"+str(opt.knn_k)+'.npy')

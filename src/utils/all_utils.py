@@ -1,61 +1,32 @@
-from multiprocessing.spawn import import_main_path
+import os
+import glob
 import pickle
 import json
 import random
 import shutil
-import os
-import numpy as np
-import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
-import os.path
-import pickle
-import numpy as np
-from six.moves import range
+import cv2
+import yaml
+from tqdm import tqdm
+from io import StringIO 
 from sklearn import linear_model, svm
 from sklearn import metrics
 from sklearn.model_selection import train_test_split
-from utils import tcav_utils  as utils
-from tqdm import tqdm
-# import tensorflow as tf
-import yaml
-import numpy as np
-import PIL
-import matplotlib.pyplot as plt
-import cv2
+from six.moves import range
+from torch import nn, optim
 import torch
-import os
 import torch.nn.functional as F
-import torch.nn as nn
-import os
-from os import listdir
-from os.path import isfile, join
-import cv2
-from io import StringIO 
 from torch.utils.data import Dataset, DataLoader
-import glob
-import torch.utils.data as tutils
-# from utils_tcav2 import *
-# from utils.imdb_classi_test import *
-from torchvision.models import resnet18
-# from DomainGeneralization.Table1.model import MyResnet, MyVGG, MyInceptionResnet, MyAlexnet
-# from DomainGeneralization.Table1.PACSDataset import PACSDataset
 import torchvision.transforms as transforms
-# from train_teacher_map_pacs import DecoMapMNISTNN, EncoMapMNISTNN
+from torchvision.models import resnet18
+from PIL import Image
 
 import numpy as np # linear algebra
-import torch
-from torch import nn, optim
-from torchvision import datasets, models, transforms
-from torch import functional as F
 import pandas as pd
-from torch.utils.data import Dataset, DataLoader
-import matplotlib.pyplot as plt
-from glob import glob
-from PIL import Image
-import os
-import glob
-from tqdm import tqdm
+from torchvision import datasets, models, transforms
+
+
 DATA_PATH = '/media/Data2/avani.gupta/'
 class IMDBTestDataSet(Dataset):
     def __init__(self, transforms):

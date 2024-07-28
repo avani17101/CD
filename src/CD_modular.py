@@ -2,23 +2,14 @@ from utils.utils_train import *
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.autograd as autograd
 import glob
 import os
-import copy
 import numpy as np
-from collections import OrderedDict
 from sklearn.cluster import KMeans
 from tqdm import tqdm
-from statistics import mean
-import torch.utils.data as tutils
-from torchvision.models import resnet18
 import torchvision.transforms as transforms
-from torchvision.models import resnet50
-import torchvision.transforms as transforms
-from torchvision.datasets import ImageFolder
 import dep.score_funcs as score_funcs
-DATA_PATH='/ssd_scratch/cvit/avani.gupta/'
+DATA_PATH='data/'
 
 class CD():
     '''
@@ -300,8 +291,6 @@ class CD():
             self.proto_dic = proto_dic
         else:
             X_full, y_full = X_full.cuda(), y_full.cuda()
-            # X_full = torch.cat([x for x, y in batches])
-            # y_full = torch.cat([y for x, y in batches])
             bn_activation = None
             for c in self.class_labels:
                 acts = []
@@ -547,10 +536,6 @@ parser.add_argument("--proto_update_prob", default=0.2, type=float)
 parser.add_argument("--use_proto", default=True, type=bool)
 parser.add_argument("--do_proto_mean", default=True, type=bool)
 parser.add_argument("--update_cavs", default=True, type=bool)
-# parser.add_argument("--model_type", default='resnet50')
-# parser.add_argument("--dset", default='imgnet')
-# parser.add_argument("--pairs_vals", default="textures", type=str)
-# parser.add_argument("--bottleneck_name", default='layer4.2.conv3', type=str)
 parser.add_argument("--model_type", default='colormnist')
 parser.add_argument("--dset", default='mnist')
 parser.add_argument("--pairs_vals", default="8", type=str)
@@ -566,238 +551,19 @@ parser.add_argument('--teach_mapped_to_stu', type=int, default=1)
 parser.add_argument('--cdep_grad_method', type=int, default=1, help='grad method cdep')
 parser.add_argument('--cav_space', type=str, default='student', help='cav_space: teacher, student, mapped_teacher, debiased_student')
 parser.add_argument('--checkpoints_dir', type=str, default=DATA_PATH+'new_checkpoints/', help='models are saved here')
-# sys.argv = ['']
-# parser.set_defaults(verbose=False)
-hparams = parser.parse_args()
-# from da import *
+args = parser.parse_args()
 from utils.imdb_classi_test import *
 from utils.networks_classi import *
 
-model_type = hparams.model_type
-num_imgs = hparams.num_imgs
+model_type = args.model_type
+num_imgs = args.num_imgs
 batch_size = 64
-# wandb.init(project="change_cav_new", entity="avani",config=hparams, save_code=True)
-hparams = vars(hparams)
-
-if  model_type == 'resnet50':
-    val_transforms = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Resize(256),
-    transforms.CenterCrop(224),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
-
-    shape = (224,224)
-    model = resnet50(pretrained=True)
-    model = model.cuda()
-    bs = 32
-    imagenet_zip_path = DATA_PATH+'Imagenet2012/Imagenet-sample/'
-    with open('imagenet_class_index.json', "r") as f:
-        data = json.load(f)
-    label_mapping = {}
-    for key, value in data.items():
-        label_mapping[value[0]] = int(key)
-    label_to_class = {value: key for key, value in label_mapping.items()}
-    hparams["label_mapping"] = label_mapping
-    hparams["label_to_class"] = label_to_class
-
-    train_dataset =  AllClassesImgsDataset(path=imagenet_zip_path+'train/',shape=(224,224),label_mapping=label_mapping, transform=val_transforms)
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=bs,
-                                            shuffle=True, num_workers=2)
-
-    val_dataset =  AllClassesImgsDataset(path=imagenet_zip_path+'val/',shape=(224,224),label_mapping=label_mapping, transform=val_transforms)
-    
-    
-    val_loader = torch.utils.data.DataLoader(train_dataset, batch_size=bs,
-                                            shuffle=True, num_workers=2)
-
-    ### make sure loaded labels match with pre-trained model's sense of labels
-    assert(all(train_dataset.class_to_idx[key] == label_mapping[key] for key in train_dataset.class_to_idx))
-    assert(all(val_dataset.class_to_idx[key] == label_mapping[key] for key in val_dataset.class_to_idx))
-
-    test_loader = None
-    named_layers = dict(model.named_modules())
-    lis = list(named_layers.keys())
-    bottleneck_name = "layer4.2.conv3"
-    class_names = train_dataset.class_to_idx.keys()
-    class_names_to_labels_dic = train_dataset.class_to_idx
-    class_labels = list(train_dataset.class_to_idx.values())
-    hparams["transforms"] = val_transforms
-
-if model_type == 'faces':
-    model = resnet18(pretrained=False)
-    model.fc = nn.Linear(512,2)
-    if not hparams["train_from_scratch"]:
-        model.load_state_dict(torch.load("/ssd_scratch/cvit/avani.gupta/bffhq/bffhq/bffhq_0.5_vanilla/result/best_model.th")['state_dict'])
-    model.cuda()
-    model.cuda()
-    model.eval()
-    bs = 64
-    train_loader = DataLoader(bFFHQDataset("train"),bs, shuffle=True, num_workers=0)
-    val_loader = DataLoader(bFFHQDataset("valid"),bs, shuffle=True, num_workers=0)
-    test_loader = DataLoader(bFFHQDataset("test"),bs, shuffle=True, num_workers=0)
-    named_layers = dict(model.named_modules())
-    lis = list(named_layers.keys())
-    bottleneck_name = 'layer4.1.conv1'
-    shape = (224,224)
-    num_classes = 2
-    full_X_proto = False
-    class_labels = [0,1]
-    hparams["transforms"] = val_transforms
-
-if model_type =='cat_dog':
-    full_X_proto = False
-    model = models.resnet18(pretrained=True)
-    in_feats = model.fc.in_features
-    model.fc = nn.Linear(in_feats, 1)
-    bias = 'TB'+str(bias)
-    model.load_state_dict(torch.load('/home/avani.gupta/tcav_pt/cat_dog_model'+bias+'.pt'))
-    model = model.cuda()
-    model.eval()
-    shape = (224,224)
-    bs = 64
-    if bias=='TB2':
-        dset = 'cat_dog'+bias
-    dset ='cat_dog' #+bias
-    # dset = 'imdb'
-    # bias = 'EB2' #[TB1, TB2 for cat_dot], EB1, EB2 for imdb
-    data_transform = transforms.Compose([transforms.RandomResizedCrop(224),
-            transforms.RandomHorizontalFlip(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                std=[0.229, 0.224, 0.225])
-        ])
-    print("catt")
-    train_ds = CatBiasedDataSet(data_transform,bias,mode='train')
-    train_loader = DataLoader(train_ds, bs, shuffle=True, num_workers=3)
-    val_ds = CatBiasedDataSet(data_transform,bias,mode='val')
-    val_loader = DataLoader(val_ds, bs, shuffle=True, num_workers=3)
-
-    if bias == "1":
-        opp = "2"
-    else:
-        opp = "1"
-    if dset =='cat_dog':
-        bias = "TB"+bias
-        opp_bias = "TB"+opp
-    else:
-        bias = "EB"+bias
-        opp_bias = "EB"+opp
-    print("opp_bias",opp_bias)
-    ds = CatBiasedDataSet(data_transform,opp_bias,mode='test')  #use entire set of opposite set
-    test_loader = DataLoader(ds, bs)
-    named_layers = dict(model.named_modules())
-    lis = list(named_layers.keys())
-    bottleneck_name = 'layer4.1.conv1'
-    num_clsses = 2
-    class_labels = [0,1]
-
-
-if model_type == 'decoymnist':
-    dpath = 'dep/data/DecoyMNIST/'
-    X_full = torch.Tensor(np.load(os.path.join(dpath, "train_x_decoy.npy")))
-    y_full = torch.Tensor(np.load(os.path.join(dpath, "train_y.npy"))).type(torch.int64)
-    complete_dataset = tutils.TensorDataset(X_full, y_full) # create your datset
-
-    num_train = int(len(complete_dataset)*.9)
-    num_test = len(complete_dataset)  - num_train 
-    torch.manual_seed(0)
-
-    train_dataset, val_dataset,= torch.utils.data.random_split(complete_dataset, [num_train, num_test])
-    train_loader = tutils.DataLoader(train_dataset, batch_size=num_imgs, shuffle=True, **kwargs) # create your dataloader
-    val_loader = tutils.DataLoader(val_dataset, batch_size=num_imgs, shuffle=True, **kwargs) # create your dataloader
-
-    test_x_tensor = torch.Tensor(np.load(os.path.join(dpath, "test_x_decoy.npy")))
-    test_y_tensor = torch.Tensor(np.load(os.path.join(dpath, "test_y.npy"))).type(torch.int64)
-    test_dataset = tutils.TensorDataset(test_x_tensor,test_y_tensor) # create your datset
-    test_loader = tutils.DataLoader(test_dataset, batch_size=num_imgs, shuffle=True, **kwargs) # create your dataloader
-    
-    model = MNISTDecoyNet()
-    model.cuda()
-    shape = (28,28)
-    if not hparams["train_from_scratch"]:
-        model.load_state_dict(torch.load('mnist/DecoyMNIST/orig_model_decoyMNIST_.pt'))
-    bottleneck_name = 'conv2'
-    num_classes = 10
-    full_X_proto = True
-    class_labels = np.arange(0,10)
-
-
-if model_type =='colormnist':
-    x_numpy_train = np.load(os.path.join("dep/data/ColorMNIST", "train_x.npy"))
-    prob = (x_numpy_train.sum(axis = 1) > 0.0).mean(axis = 0).reshape(-1)
-    prob /=prob.sum()
-    mean = x_numpy_train.mean(axis = (0,2,3))
-    std = x_numpy_train.std(axis = (0,2,3))
-    bottleneck_name = hparams["bottleneck_name"]
-    if bottleneck_name=='conv1':
-        dset = dset + 'conv1'
-
-    def load_dataset(name, path='dep/'):
-        x_numpy = np.load(os.path.join(path+"data/ColorMNIST", name + "_x.npy"))
-        x_numpy -= mean[None, :, None, None,]
-        x_numpy /= std[None, :, None, None,]
-        y_numpy = np.load(os.path.join(path+"data/ColorMNIST", name +"_y.npy"))
-        x_tensor = torch.Tensor(x_numpy)
-        y_tensor = torch.Tensor(y_numpy).type(torch.int64)
-        dataset = tutils.TensorDataset(x_tensor,y_tensor) 
-        return dataset, x_tensor, y_tensor
-
-    train_dataset,X_full,y_full = load_dataset("train")
-    val_dataset,val_x, val_y  = load_dataset("val")
-    test_dataset,_,_ = load_dataset("test")
-    train_loader = tutils.DataLoader(train_dataset,batch_size=batch_size,shuffle=True)
-    val_loader = tutils.DataLoader(val_dataset,batch_size=batch_size)
-    test_loader = tutils.DataLoader(test_dataset,batch_size=batch_size)
-    model = MNISTColorNet()
-    model.cuda()
-    shape = (28,28)
-    if not hparams["train_from_scratch"]:
-        if hparams['cav_space']=='debiased_student':
-            model.load_state_dict(torch.load(DATA_PATH+'acc46.03best_val_acc45.28highest_epoch0iter0colormnistmnistp8nimg150lr0.01rr0.3wtcav5bs44pwt0.3upr1cd1precalc1up1scratch0uknn1cwt0s42corr'))
-        else:
-            model.load_state_dict(torch.load('mnist/ColorMNIST/orig_model_colorMNIST.pt'))
-
-    num_classes = 10
-    full_X_proto = True
-    class_labels = np.arange(0,10)
-    
-if model_type =='texturemnist':
-    x_numpy_train = np.load(os.path.join("/ssd_scratch/cvit/avani.gupta/data/ColorMNIST", "train_texture_x.npy"))
-    prob = (x_numpy_train.sum(axis = 1) > 0.0).mean(axis = 0).reshape(-1)
-    prob /=prob.sum()
-    mean = x_numpy_train.mean(axis = (0,2,3))
-    std = x_numpy_train.std(axis = (0,2,3))
-    bottleneck_name = 'conv2'
-    if bottleneck_name=='conv1':
-        dset = dset + 'conv1'
-
-    def load_dataset(name, path='dep/'):
-        x_numpy = np.load(os.path.join(path+"data/ColorMNIST", name + "_x.npy"))
-        x_numpy -= mean[None, :, None, None,]
-        x_numpy /= std[None, :, None, None,]
-        y_numpy = np.load(os.path.join(path+"data/ColorMNIST", name +"_y.npy"))
-        x_tensor = torch.Tensor(x_numpy)
-        y_tensor = torch.Tensor(y_numpy).type(torch.int64)
-        dataset = tutils.TensorDataset(x_tensor,y_tensor) 
-        return dataset, x_tensor, y_tensor
-
-    train_dataset,X_full,y_full = load_dataset("train_texture")
-    val_dataset,val_x, val_y  = load_dataset("val_texture")
-    test_dataset,_,_ = load_dataset("test_texture")
-    train_loader = tutils.DataLoader(train_dataset,batch_size=batch_size,shuffle=True)
-    val_loader = tutils.DataLoader(val_dataset,batch_size=batch_size)
-    test_loader = tutils.DataLoader(test_dataset,batch_size=batch_size)
-    model = MNISTColorNet()
-    model.cuda()
-    shape = (28,28)
-    num_classes = 10
-    full_X_proto = True
-    class_labels = np.arange(0,10)
-    if not hparams["train_from_scratch"]:
-        model.load_state_dict(torch.load('/home/avani.gupta/tcav_pt/methodvanilla_tex.pt'))
-
-
-if not os.path.exists(hparams['checkpoints_dir']):
-    os.makedirs(hparams['checkpoints_dir'])
+hparams = vars(args)
+use_cuda = torch.cuda.is_available()
+kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
+model, bottleneck_name, train_loader, val_loader, test_loader, X_full, y_full, val_x, val_y, shape = get_model_and_data(model_type, args, kwargs)
+model = model.cuda()
+named_layers = dict(model.named_modules())
 
 def get_model_save_name(hparams):
     model_save_name = hparams["model_type"]+hparams["dset"]
@@ -821,12 +587,10 @@ custom_transform = transforms.Compose([
 ])
 if 'mnist' in hparams['model_type']:
     hparams["transforms"] = custom_transform
-# cd = CD(shape, num_classes,hparams=hparams,network=model)#full_X_proto=full_X_proto)
 cd = CD(shape, hparams=hparams,network=model, class_labels=class_labels,transform=hparams["transforms"])#full_X_proto=full_X_proto)
 cd.save_student_outs(hparams["pairs_vals"])
 cd.map_activation_spaces()
 cd.train_cavs()
-# cd.update_proto(X_full,y_full)
 
 best_val_acc = -1
 corr_test_acc = 0

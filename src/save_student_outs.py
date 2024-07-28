@@ -1,113 +1,24 @@
-from turtle import Shape
+from argparse import ArgumentParser
+import abc
 import torch
 import torch.nn as nn
 import numpy as np
 from utils.utils_tcav2 import *
-from scipy.stats import ttest_ind
 import numpy as np
-import matplotlib.pyplot as plt
 import os.path
-import pickle
-from torchvision.models import resnet18, resnet50
 import numpy as np
-from six.moves import range
-from sklearn import linear_model, svm
-from sklearn import metrics
-from sklearn.model_selection import train_test_split
-from utils import tcav_utils  as utils
-import tensorflow as tf
-import yaml
-import numpy as np
-import PIL
-import matplotlib.pyplot as plt
-import cv2
 import torch
 import os
 import torch.nn.functional as F
 import torch.nn as nn
 import os
-from os import listdir
-from os.path import isfile, join
-import cv2
-from io import StringIO 
-from sklearn.decomposition import PCA
-from tqdm import tqdm
-import torch
-from torch import nn
-import torch.nn.functional as F
-import abc
 import torchvision.models as models
-from torch.autograd import Variable
-import numpy as np
 from torch.utils.data import Dataset, DataLoader
 # from CGIntrinsics.models import networks
 from utils.networks_classi import *
 from utils.utils_train import *
-import random
-import torch.utils.data as tutils
-import argparse
-from datetime import datetime
-import json
-from argparse import ArgumentParser
+
 from utils.imdb_classi_test import *
-import torch.nn.functional as F
-import abc
-import torchvision.models as models
-from torch.autograd import Variable
-
-def get_args():
-    parser = argparse.ArgumentParser()
-    # generic params
-    parser.add_argument(
-        "--name",
-        default=datetime.now().strftime("%Y-%m-%d_%H:%M:%S"),
-        help="Name to store the log file as",)
-    parser.add_argument(
-        "--seed", type=int, default=10, help="Random generator seed for all frameworks")
-    parser.add_argument("--resume", help="Path to log file to resume from")
-    parser.add_argument("--mode", default="test", help="train, test, or plot")
-    parser.add_argument("--data-dir", default="/media/Data2/avani.gupta/CLEVR-Hans3/", help="Directory to data")
-    parser.add_argument("--fp-ckpt", type=str, default='/home/avani.gupta/tcav_pt/NeSyXIL/src/clevr_hans/cnn/runs/conf_3/resnet-clevr-hans-17-conf_3_seed0/model_epoch56_bestvalloss_0.0132.pth', help="checkpoint filepath")
-    parser.add_argument("--epochs", type=int, default=10, help="Number of epochs to train with")
-    parser.add_argument("--lr", type=float, default=1e-2, help="Outer learning rate of model")
-    parser.add_argument("--batch-size", type=int, default=32, help="Batch size to train with")
-    parser.add_argument(
-        "--num-workers", type=int, default=4, help="Number of threads for data loader"
-    )
-    parser.add_argument(
-        "--dataset",
-        default = "clevr-hans-state",
-        choices=["clevr-hans-state"],
-    )
-    parser.add_argument(
-        "--no-cuda",
-        action="store_true",
-        help="Run on CPU instead of GPU (not recommended)",
-    )
-    parser.add_argument(
-        "--train-only", action="store_true", help="Only run training, no evaluation"
-    )
-    parser.add_argument(
-        "--eval-only", action="store_true", help="Only run evaluation, no training"
-    )
-
-    args = parser.parse_args()
-
-    assert args.data_dir.endswith(os.path.sep)
-    args.conf_version = args.data_dir.split(os.path.sep)[-2]
-    args.name = args.name + f"-{args.conf_version}"
-
-    if args.mode == 'test':
-        assert args.fp_ckpt
-
-    if args.no_cuda:
-        args.device = 'cpu'
-    else:
-        args.device = 'cuda'
-
-    # tutils.seed_everything(args.seed)
-
-    return args
 
 
 
@@ -152,8 +63,6 @@ class fchead(torch.nn.Module):
         feature = feature.view(-1,196608)
         output = torch.sigmoid(self.linear(feature))
         return output
-
-
 
 
 class AbstractAutoEncoder(nn.Module):
@@ -330,14 +239,12 @@ if __name__ == "__main__":
             elif model_type =='toy_conv':
                 out = model(im.unsqueeze(0).cuda().float())
             else: #model_type =='colormnist' or model_type=='decoymnist' or mo:
-                # im = im.view(-1,200*200)
                 out = model(im.unsqueeze(0).cuda().float())
             
             act = bn_activation.detach()
         
             acts.append(act)
             handle.remove()
-        # breakpoint()
         acts = torch.concat(acts,axis=0)
         torch.save(acts,save_path+con[0]+'all.pt')
         print("acts",acts.shape)

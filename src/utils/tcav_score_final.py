@@ -1,45 +1,23 @@
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
-from re import L
-from selectors import EpollSelector
 import numpy as np
 from utils_tcav2 import *
 import torch
 from tqdm import tqdm
 import os
-import torch.nn.functional as F
-import torch.nn as nn
-import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
-import numpy as np
-from statistics import mean
-import json
 # from train_student_map import *
 from tcav_options import *
-import math
-from argparse import ArgumentParser
-import torch.utils.data as tutils
-from torch.autograd import Variable
-import math
-import wandb
-import csv
 torch.cuda.empty_cache()
-from os.path import join as oj
-from datetime import datetime
 from utils_train import *
 from networks_classi import *
-import sys
-from sklearn.cluster import KMeans
-import dep.score_funcs as score_funcs
-from torchvision.models import resnet18
-from torchvision.models import resnet50
 # from DomainGeneralization.Table1.model import MyResnet, MyVGG, MyInceptionResnet, MyAlexnet
 # from DomainGeneralization.Table1.PACSDataset import PACSDataset
 import torchvision.transforms as transforms
 # from train_teacher_map_pacs import DecoMapMNISTNN, EncoMapMNISTNN
 import torchvision.transforms as transforms
-from torchvision.datasets import ImageFolder
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
 
 train_transforms = transforms.Compose([
     transforms.RandomResizedCrop(224),

@@ -1,42 +1,15 @@
-from turtle import down
 import torch
 import torch.nn as nn
 import numpy as np
 from statistics import mean
-
-
-#### cav module
 from utils.utils_tcav2 import *
-from scipy.stats import ttest_ind
-import numpy as np
-import matplotlib.pyplot as plt
 import os.path
 import pickle
 import numpy as np
-from six.moves import range
-from sklearn import linear_model, svm
-from sklearn import metrics
-from sklearn.model_selection import train_test_split
-from utils import tcav_utils  as utils
-import tensorflow as tf
-import yaml
-import numpy as np
-import PIL
-import matplotlib.pyplot as plt
-import cv2
-from os import listdir
-from os.path import isfile, join
-import cv2
-from io import StringIO 
-from sklearn.decomposition import PCA
 from tqdm import tqdm
-import torch
-from torch import nn
 import torch.nn.functional as F
 import abc
-# import pytorch_ssim
 import torchvision.models as models
-from torch.autograd import Variable
 import numpy as np
 import abc
 
@@ -187,27 +160,8 @@ class ResNet_Enco(AbstractAutoEncoder):
 
     def encode(self, x):
         x = self.resnet(x)  # ResNet
-#         x = x.view(x.size(0), -1)  # flatten output of conv
         return x
-#         FC layers
-#         x = self.bn1(self.fc1(x))
-#         x = self.relu(x)
-#         x = self.bn2(self.fc2(x))
-#         x = self.relu(x)
-#         x = F.dropout(x, p=self.drop_p, training=self.training)
-#         mu, logvar = self.fc3_mu(x), self.fc3_logvar(x)
-#         return mu, logvar
-    # def reparameterize(self, mu, logvar):
-    #     std = torch.exp(logvar/2)
-    #     eps = torch.randn_like(std)
-    #     return mu + eps * std
     def decode(self, x):
-#         x = self.fc_bn4(self.fc4(z))
-#         x = self.relu(x)
-#         x = self.fc_bn5(self.fc5(x))
-#         x = self.relu(x).view(-1, 1024, 1, 1)
-
-#         x = self.convTrans9(x)
         x = self.convTrans10(x)
         x = self.convTrans11(x)
         x = self.convTrans12(x)
@@ -218,19 +172,13 @@ class ResNet_Enco(AbstractAutoEncoder):
         return x
     def forward(self, x,latent_vec=False):
         x = self.encode(x)
-        # z = self.reparameterize(mu, logvar)
         x_reconst = self.decode(x)
-        # if latent_vec:
-        #     return x_reconst, mu, logvar, z
-        # else:
         return x_reconst
 
 if __name__ == "__main__":
     direcs = {}
     with open('pairs_large.pickle', 'rb') as handle:
         pairs = pickle.load(handle)
-    # pairs = list(pairs.values())
-    # breakpoint()
     concepts = list(pairs.keys())
 
     for c in pairs:
@@ -239,8 +187,6 @@ if __name__ == "__main__":
 
     concepts = list(set(concepts))
     print(concepts)
-    # shape = 
-    # files = os.listdir('/media/Data2/avani.gupta/data/dino/pca64/')
     upconv_m = ConvsUnconvNN()
     model = ResNet_Enco()
     downconv_m = ConvsDownconvNN()
@@ -267,27 +213,12 @@ if __name__ == "__main__":
     CGmodel.netG = CGmodel.netG.cuda()
     for p in CGmodel.netG.parameters():
         p.requires_grad = False
-    # acts_dic = {'R':{},'S':{}}
-    # for con in tqdm(concepts):
-    #     imgs = np.load(path_nps+con+'.npy')
-    #     # print(imgs)
-    #     # breakpoint()
-    #     imgs = np.moveaxis(imgs,3,1)
-    #     imgs = torch.from_numpy(imgs)
-    #     imgs = imgs.cuda()
-    #     with torch.no_grad():
-    #         out = CGmodel.netG(imgs)
-    #         R, S = out
-    #         acts_dic['R'][con] = R.detach()
-    #         acts_dic['S'][con] = S.detach()
 
     for branch in ['S']:
         for ep in tqdm(range(50)):
             
             for con in tqdm(concepts):
                 imgs = np.load(path_nps+con+'.npy')
-                # print(imgs)
-                # breakpoint()
                 imgs = np.moveaxis(imgs,3,1)
                 imgs = torch.from_numpy(imgs)
                 imgs = imgs.cuda()
@@ -298,14 +229,12 @@ if __name__ == "__main__":
                 else:
                     acts = S
                 x = upconv_m(acts)
-                # print("x",x.shape)
                 x_e = model.encode(x)
                 x_d = model.decode(x_e)
                 x_fea = downconv_m(x_d)
                 loss = mse_loss(x_d, x) + mse_loss(x_fea, acts)
 
                 loss.backward()
-                # print(loss.item())
                 assert(torch.isnan(torch.tensor(loss.item()))==False)
                 loss_lis.append(loss.item())
 

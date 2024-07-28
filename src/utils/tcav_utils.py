@@ -1,5 +1,4 @@
 from torch.utils.data import DataLoader
-from torch.autograd import Variable
 from torch.optim import lr_scheduler
 from torchvision import transforms
 from .data import ImageFilelist, ImageFolder, CGIFolder, MPIFolder
@@ -7,7 +6,6 @@ import torch
 import os
 import math
 import torchvision.utils as vutils
-import torch.utils.model_zoo as model_zoo
 import yaml
 import numpy as np
 import torch.nn.init as init

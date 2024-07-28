@@ -1,6 +1,5 @@
 import argparse
 import os
-from datetime import datetime
 
 class TCAVOptions():
     def __init__(self):

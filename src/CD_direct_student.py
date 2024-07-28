@@ -1,8 +1,6 @@
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
-from re import L
-from selectors import EpollSelector
 import numpy as np
 from utils_tcav2 import *
 import torch
@@ -10,31 +8,20 @@ from tqdm import tqdm
 import os
 import torch.nn.functional as F
 import torch.nn as nn
-import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
 import numpy as np
-from statistics import mean
-import json
 # from train_student_map import *
 from tcav_options_direct_student import *
-import math
 from tqdm import tqdm
-from argparse import ArgumentParser
-import torch.utils.data as tutils
-from torch.autograd import Variable
-import math
 import wandb
-import csv
 torch.cuda.empty_cache()
-from os.path import join as oj
-from datetime import datetime
 from utils_train import *
 from networks_classi import *
-import sys
 from sklearn.cluster import KMeans
 import dep.score_funcs as score_funcs
-from torchvision.models import resnet18
-import glob
+from imdb_classi_test import *
+from utils.all_utils import *
+
 
 # from DomainGeneralization.Table1.model import MyResnet, MyVGG, MyInceptionResnet, MyAlexnet
 # from DomainGeneralization.Table1.PACSDataset import PACSDataset
@@ -100,160 +87,10 @@ bias = "1"
 print(opt.gpu_ids)
 use_cuda = torch.cuda.is_available()
 
-from imdb_classi_test import *
 kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
-if model_type == 'faces':
-    shape = (224,224)
-    model = resnet18(pretrained=False)
-    model.fc = nn.Linear(512,2)
-    if not opt.train_from_scratch:
-        model.load_state_dict(torch.load(DATA_PATH+"new_checkpoints/acc59.0best_val_acc99.5highest_epoch0iter0facesfacesp8nimg150lr0.01rr0.3wtcav5bs44pwt0.3upr1cd0precalc1up1scratch0uknn1cwt0s42corr"))
-    model.cuda()
-    model.eval()
-    bs = 64
-    train_loader = DataLoader(bFFHQDataset("train"),bs, shuffle=True, num_workers=0)
-    val_loader = DataLoader(bFFHQDataset("valid"),bs, shuffle=True, num_workers=0)
-    test_loader = DataLoader(bFFHQDataset("test"),bs, shuffle=True, num_workers=0)
-    named_layers = dict(model.named_modules())
-    lis = list(named_layers.keys())
-    bottleneck_name = 'layer4.1.conv1'
-
-if model_type =='cat_dog':
-    model = models.resnet18(pretrained=True)
-    in_feats = model.fc.in_features
-    model.fc = nn.Linear(in_feats, 1)
-    bias = 'TB'+str(bias)
-    model.load_state_dict(torch.load('/home/avani/tcav_pt/cat_dog_model'+bias+'.pt'))
-    model = model.cuda()
-    model.eval()
-
-    bs = 64
-    if bias=='TB2':
-        dset = 'cat_dog'+bias
-    dset ='cat_dog' #+bias
-    
-    # dset = 'imdb'
-    # bias = 'EB2' #[TB1, TB2 for cat_dot], EB1, EB2 for imdb
-    data_transform = transforms.Compose([transforms.RandomResizedCrop(224),
-            transforms.RandomHorizontalFlip(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                std=[0.229, 0.224, 0.225])
-        ])
-    print("catt")
-    train_ds = CatBiasedDataSet(data_transform,bias,mode='train')
-    train_loader = DataLoader(train_ds, bs, shuffle=True, num_workers=3)
-    val_ds = CatBiasedDataSet(data_transform,bias,mode='val')
-    val_loader = DataLoader(val_ds, bs, shuffle=True, num_workers=3)
-
-    if bias == "1":
-        opp = "2"
-    else:
-        opp = "1"
-    if dset =='cat_dog':
-        bias = "TB"+bias
-        opp_bias = "TB"+opp
-    else:
-        bias = "EB"+bias
-        opp_bias = "EB"+opp
-    print("opp_bias",opp_bias)
-    ds = CatBiasedDataSet(data_transform,opp_bias,mode='test')  #use entire set of opposite set
-    test_loader = DataLoader(ds, bs)
-
-    named_layers = dict(model.named_modules())
-    lis = list(named_layers.keys())
-    bottleneck_name = 'layer4.1.conv1'
-
-
-if model_type == 'decoymnist':
-    dpath = 'dep/data/DecoyMNIST/'
-    X_full = torch.Tensor(np.load(oj(dpath, "train_x_decoy.npy")))
-    y_full = torch.Tensor(np.load(oj(dpath, "train_y.npy"))).type(torch.int64)
-    complete_dataset = tutils.TensorDataset(X_full, y_full) # create your datset
-
-    num_train = int(len(complete_dataset)*.9)
-    num_test = len(complete_dataset)  - num_train 
-    torch.manual_seed(0)
-    train_dataset, val_dataset,= torch.utils.data.random_split(complete_dataset, [num_train, num_test])
-    train_loader = tutils.DataLoader(train_dataset, batch_size=num_imgs, shuffle=True, **kwargs) # create your dataloader
-    val_loader = tutils.DataLoader(val_dataset, batch_size=num_imgs, shuffle=True, **kwargs) # create your dataloader
-
-    test_x_tensor = torch.Tensor(np.load(oj(dpath, "test_x_decoy.npy")))
-    test_y_tensor = torch.Tensor(np.load(oj(dpath, "test_y.npy"))).type(torch.int64)
-    test_dataset = tutils.TensorDataset(test_x_tensor,test_y_tensor) # create your datset
-    test_loader = tutils.DataLoader(test_dataset, batch_size=num_imgs, shuffle=True, **kwargs) # create your dataloader
-    
-    model = MNISTDecoyNet()
-    model.cuda()
-    shape = (28,28)
-    if not train_from_scratch:
-        model.load_state_dict(torch.load('mnist/DecoyMNIST/orig_model_decoyMNIST_.pt'))
-    bottleneck_name = 'conv2'
-
-if model_type =='colormnist':
-    x_numpy_train = np.load(os.path.join("dep/data/ColorMNIST", "train_x.npy"))
-    prob = (x_numpy_train.sum(axis = 1) > 0.0).mean(axis = 0).reshape(-1)
-    prob /=prob.sum()
-    mean = x_numpy_train.mean(axis = (0,2,3))
-    std = x_numpy_train.std(axis = (0,2,3))
-    bottleneck_name = opt.bottleneck_name
-    if bottleneck_name=='conv1':
-        dset = dset + 'conv1'
-
-    def load_dataset(name, path='dep/'):
-        x_numpy = np.load(os.path.join(path+"data/ColorMNIST", name + "_x.npy"))
-        x_numpy -= mean[None, :, None, None,]
-        x_numpy /= std[None, :, None, None,]
-        y_numpy = np.load(os.path.join(path+"data/ColorMNIST", name +"_y.npy"))
-        x_tensor = torch.Tensor(x_numpy)
-        y_tensor = torch.Tensor(y_numpy).type(torch.int64)
-        dataset = tutils.TensorDataset(x_tensor,y_tensor) 
-        return dataset, x_tensor, y_tensor
-
-    train_dataset,X_full,y_full = load_dataset("train")
-    val_dataset,val_x, val_y  = load_dataset("val")
-    test_dataset,_,_ = load_dataset("test")
-    train_loader = tutils.DataLoader(train_dataset,batch_size=batch_size,shuffle=True)
-    val_loader = tutils.DataLoader(val_dataset,batch_size=batch_size)
-    test_loader = tutils.DataLoader(test_dataset,batch_size=batch_size)
-    model = MNISTColorNet()
-    model.cuda()
-    shape = (28,28)
-
-    if not train_from_scratch:
-        # model.load_state_dict(torch.load(DATA_PATH+'new_checkpoints/acc46.64best_val_acc45.7highest_epoch0iter130colormnistcolormnistp8nimg150lr0.01rr0.3wtcav5bs44pwt0.3upr1cd0precalc1up1scratch0uknn1cwt0s42corr'))
-        model.load_state_dict(torch.load('mnist/ColorMNIST/orig_model_colorMNIST.pt'))
-
-if model_type =='texturemnist':
-    x_numpy_train = np.load(os.path.join(DATA_PATH+"data/ColorMNIST", "train_texture_x.npy"))
-    prob = (x_numpy_train.sum(axis = 1) > 0.0).mean(axis = 0).reshape(-1)
-    prob /=prob.sum()
-    mean = x_numpy_train.mean(axis = (0,2,3))
-    std = x_numpy_train.std(axis = (0,2,3))
-    bottleneck_name = 'conv2'
-    if bottleneck_name=='conv1':
-        dset = dset + 'conv1'
-
-    def load_dataset(name, path='dep/'):
-        x_numpy = np.load(os.path.join(path+"data/ColorMNIST", name + "_x.npy"))
-        x_numpy -= mean[None, :, None, None,]
-        x_numpy /= std[None, :, None, None,]
-        y_numpy = np.load(os.path.join(path+"data/ColorMNIST", name +"_y.npy"))
-        x_tensor = torch.Tensor(x_numpy)
-        y_tensor = torch.Tensor(y_numpy).type(torch.int64)
-        dataset = tutils.TensorDataset(x_tensor,y_tensor) 
-        return dataset, x_tensor, y_tensor
-
-    train_dataset,X_full,y_full = load_dataset("train_texture")
-    val_dataset,val_x, val_y  = load_dataset("val_texture")
-    test_dataset,_,_ = load_dataset("test_texture")
-    train_loader = tutils.DataLoader(train_dataset,batch_size=batch_size,shuffle=True)
-    val_loader = tutils.DataLoader(val_dataset,batch_size=batch_size)
-    test_loader = tutils.DataLoader(test_dataset,batch_size=batch_size)
-    model = MNISTColorNet()
-    model.cuda()
-    shape = (28,28)
-    if not train_from_scratch:
-        model.load_state_dict(torch.load('/home/avani/tcav_pt/main_files/methodvanilla_tex.pt'))
+model, bottleneck_name, train_loader, val_loader, test_loader, X_full, y_full, val_x, val_y, shape = get_model_and_data(model_type, opt, kwargs)
+model = model.cuda()
+named_layers = dict(model.named_modules())
 
 s = ""
 if train_from_scratch:

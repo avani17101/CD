@@ -16,8 +16,6 @@ from utils.utils_train import *
 from utils.networks_classi import *
 from argparse import ArgumentParser
 
-# from train_teacher_map import *
-# from N3F.feature_extractor.lib.baselines import DINO, get_model
 """
 Teacher learns fc(tcav) on concept set
 """
@@ -26,9 +24,6 @@ from utils.utils_train import *
 from utils.utils_tcav2 import *
 
 if __name__ == "__main__":
-    #### cav module ends here
-    # model_type = 'colormnist'
-    # dset = 'mnistconv1'
     parser = ArgumentParser()
     parser.add_argument("--num_imgs", default=150, type=int, help="number of imgs total")
     parser.add_argument("--pairs_vals", default=5, type=int, help="pair number")
@@ -40,9 +35,6 @@ if __name__ == "__main__":
 
     parser.set_defaults(verbose=False)
     opt = parser.parse_args()
-
-    # model_type = 'colormnist'
-    # dset = 'mnist'
     model_type = opt.model_type
     dset = opt.dset
     teacher_type = opt.teacher_type
@@ -64,7 +56,6 @@ if __name__ == "__main__":
     new_pairs = {}
     upconv_m, downconv_m, dset, bottleneck_name = get_mapping_module(opt.model_type)
 
-    
 
     #load mapping model
     if teach_mapped_to_stu:
@@ -100,16 +91,11 @@ if __name__ == "__main__":
               
               acts[con] = downconv_m(acts[con])
               acts[neg_con] = downconv_m(acts[neg_con])
-          # print(acts[con].shape, acts[neg_con].shape)
-          # breakpoint()
 
           cav, fc_state_dict = get_or_train_cav_nn([con, neg_con], 'dino', acts)
           
           fc_save_path = ''
-          # if teach_mapped_to_stu:
           fc_save_path = '/media/Data2/avani.gupta/fc_new/'+teacher_type+'_mapped_to_stu_space_num_imgs'+str(num_imgs)+dset+"M_ep"+str(opt.mapping_mod_epoch)+'/'
-          # else:
-          #   fc_save_path = '/media/Data2/avani.gupta/fc_new/direct_dino_pca_space_num_imgs'+str(num_imgs)+dset+'/'
           
           if not os.path.exists(fc_save_path):
               os.makedirs(fc_save_path)
