@@ -35,6 +35,14 @@ pip install -r requirements.txt
 
 * We provide an additional script CD_modular.py for you to customize according to dataset, models and task at hand (with user given concept sets)
 
+## Steering vectors (ActAdd) vs CD on ColorMNIST
+A training-free baseline: ActAdd steering vectors ([Turner et al.](https://arxiv.org/abs/2308.10248)) added to `conv2` of the biased ColorMNIST model, compared with CD-lite (CAV + concept-loss fine-tuning, no teacher).
+* `src/sv_debias.py`: ActAdd from a single contrast pair (coloured vs grayscale digit) and from the mean over N pairs, plus random-vector and projection controls.
+* `src/sv_vs_cd_efficiency.py`: timed comparison of steering vectors (1 to 1000 pairs) and CD-lite (λ ∈ {10, 100, 1000}), logging accuracy against wall-clock time.
+* Run from `src/` with `sbatch scripts/run_sv_vs_cd.sh`. Results for 3 seeds are in `src/sv_out/`.
+
+Summary (test %, mean of 3 seeds, A100): ActAdd 18.5 in 0.15 s, a random vector of the same norm 18.4, CD-lite ≤ 9.6 in ~23 s, CD paper 41.83 / 50.93. The steering vector does no better than a random perturbation, and a bare CAV loss without prototypes or a teacher does not remove the bias.
+
 ## TODOs
 * Clean codebase.
 * Add concept examples for example code run.
