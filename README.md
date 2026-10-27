@@ -38,10 +38,11 @@ pip install -r requirements.txt
 ## Steering vectors (ActAdd) vs CD on ColorMNIST
 A training-free baseline: ActAdd steering vectors ([Turner et al.](https://arxiv.org/abs/2308.10248)) added to `conv2` of the biased ColorMNIST model, compared with CD-lite (CAV + concept-loss fine-tuning, no teacher).
 * `src/sv_debias.py`: ActAdd from a single contrast pair (coloured vs grayscale digit) and from the mean over N pairs, plus random-vector and projection controls.
+* `src/sv_layer_sweep.py`: sweep over layer (`conv1`, `conv2`, `fc1`), number of pairs (1 to 1000) and 30 coefficients (±0.05 to ±50), with a same-norm random control in every cell. Reports the val-selected setting and the best-on-test oracle.
 * `src/sv_vs_cd_efficiency.py`: timed comparison of steering vectors (1 to 1000 pairs) and CD-lite (λ ∈ {10, 100, 1000}), logging accuracy against wall-clock time.
 * Run from `src/` with `sbatch scripts/run_sv_vs_cd.sh`. Results for 3 seeds are in `src/sv_out/`.
 
-Summary (test %, mean of 3 seeds, A100): ActAdd 18.5 in 0.15 s, a random vector of the same norm 18.4, CD-lite ≤ 9.6 in ~23 s, CD paper 41.83 / 50.93. The steering vector does no better than a random perturbation, and a bare CAV loss without prototypes or a teacher does not remove the bias.
+Summary (test %, mean of 3 seeds): an averaged ActAdd vector reaches 16.5–18.6 on every layer swept, against 17.1–19.7 for a random vector of the same norm, and the best-on-test oracle is within 0.5 points of these. Single pairs average 22.0–22.6, but that comes from one seed (27.3–32.0). CD-lite reaches ≤ 9.6 (~23 s on an A100), so a bare CAV loss without prototypes or a teacher does not remove the bias. Note that ActAdd is inference-time only while CD fine-tunes the model, so the two are compared as cost against accuracy, not head-to-head.
 
 ## TODOs
 * Clean codebase.

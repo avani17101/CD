@@ -11,5 +11,6 @@
 ## (add -p/--qos for your cluster). Needs dep/data/ColorMNIST (mnist/ColorMNIST/00_make_data.py) and data/MNIST.
 for s in 0 1 2; do
   python sv_debias.py --seed $s --out sv_out/sv_seed$s.json                  # ActAdd variants + random/projection controls
+  python sv_layer_sweep.py --seed $s --out sv_out/sweep_seed$s.json            # layer x coeff x n_pairs sweep, random control per cell
   python sv_vs_cd_efficiency.py --seed $s --out sv_out/eff_seed$s.json       # timed SV vs CD-lite
 done
